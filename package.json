@@ -1,0 +1,13 @@
+{
+  "name": "poweredcache-docs",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build-docs": "rm -rf docs && jsdoc -c hookdoc-conf.json ../powered-cache/powered-cache.php ../powered-cache/includes/"
+  },
+  "author": "PoweredCache",
+  "devDependencies": {
+    "jsdoc": "^3.6.7",
+    "wp-hookdoc": "^0.2.0"
+  }
+}

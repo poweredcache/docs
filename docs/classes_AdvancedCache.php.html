@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>PoweredCache Hooks: Source: classes/AdvancedCache.php</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: classes/AdvancedCache.php</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>&lt;?php
+/**
+ * Admin
+ *
+ * @package PoweredCache
+ */
+
+namespace PoweredCache;
+
+use const PoweredCache\Constants\POST_META_DISABLE_CACHE_KEY;
+use function PoweredCache\Utils\clean_page_cache_dir;
+use function PoweredCache\Utils\clean_site_cache_dir;
+use function PoweredCache\Utils\delete_page_cache;
+use function PoweredCache\Utils\get_post_related_urls;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly.
+}
+
+/**
+ * Class Admin
+ *
+ * @package PoweredCache
+ */
+class AdvancedCache {
+
+	/**
+	 * Return an instance of the current class
+	 *
+	 * @return AdvancedCache
+	 * @since 1.0
+	 */
+	public static function factory() {
+
+		static $instance;
+
+		if ( ! $instance ) {
+			$instance = new self();
+			$instance->setup();
+		}
+
+		return $instance;
+	}
+
+	/**
+	 * Setup hooks
+	 *
+	 * @since 1.0
+	 */
+	public function setup() {
+		$settings = \PoweredCache\Utils\get_settings();
+
+		if ( ! $settings['enable_page_cache'] ) {
+			return;
+		}
+
+		add_action( 'admin_bar_menu', array( $this, 'admin_bar_menu' ) );
+		add_action( 'admin_post_powered_cache_purge_page_cache', array( $this, 'purge_page_cache' ) );
+		add_action( 'admin_post_powered_cache_purge_page_cache_network', array( $this, 'purge_page_cache_network_wide' ) );
+		add_action( 'pre_post_update', array( $this, 'purge_on_post_update' ), 10, 1 );
+		add_action( 'save_post', array( $this, 'purge_on_post_update' ), 10, 1 );
+		add_action( 'wp_trash_post', array( $this, 'purge_on_post_update' ), 10, 1 );
+		add_action( 'switch_theme', array( $this, 'purge_on_switch_theme' ) );
+		add_action( 'wp_set_comment_status', array( $this, 'purge_post_on_comment_status_change' ), 10, 2 );
+		add_action( 'set_comment_cookies', array( $this, 'set_comment_cookie' ), 10, 2 );
+		add_filter( 'powered_cache_post_related_urls', array( $this, 'powered_cache_post_related_urls' ) );
+		add_filter( 'powered_cache_page_cache_enable', array( $this, 'maybe_caching_disabled' ) );
+		add_filter( 'powered_cache_mod_rewrite', array( $this, 'maybe_disable_mod_rewrite' ), 99 );
+	}
+
+	/**
+	 * Add purge button on admin bar
+	 *
+	 * @param object $wp_admin_bar Admin bar object
+	 *
+	 * @since 1.0
+	 */
+	public function admin_bar_menu( $wp_admin_bar ) {
+		if ( POWERED_CACHE_IS_NETWORK &amp;&amp; current_user_can( 'manage_network' ) ) {
+			$wp_admin_bar->add_menu(
+				array(
+					'id'     => 'advanced-cache-purge-network',
+					'title'  => __( 'Purge Page Cache [Network Wide - All Sites]', 'powered-cache' ),
+					'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=powered_cache_purge_page_cache_network' ), 'powered_cache_purge_page_cache_network' ),
+					'parent' => 'powered-cache',
+				)
+			);
+		}
+
+		if ( current_user_can( 'manage_options' ) ) {
+			$wp_admin_bar->add_menu(
+				array(
+					'id'     => 'advanced-cache-purge',
+					'title'  => __( 'Purge Page Cache', 'powered-cache' ),
+					'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=powered_cache_purge_page_cache' ), 'powered_cache_purge_page_cache' ),
+					'parent' => 'powered-cache',
+				)
+			);
+		}
+	}
+
+
+	/**
+	 * Purge page cache network wide
+	 *
+	 * @since 2.0
+	 */
+	public function purge_page_cache_network_wide() {
+		if ( ! wp_verify_nonce( $_GET['_wpnonce'], 'powered_cache_purge_page_cache_network' ) ) {
+			wp_nonce_ays( '' );
+		}
+
+		if ( current_user_can( 'manage_network' ) ) {
+			clean_page_cache_dir();
+			$redirect_url = add_query_arg( 'pc_action', 'flush_page_cache_network', wp_get_referer() );
+		} else {
+			$redirect_url = add_query_arg( 'pc_action', 'flush_page_cache_network_err_permission', wp_get_referer() );
+		}
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * Purge page cache directory
+	 *
+	 * @since 1.0
+	 * @since 1.1 clean site dir instead of root page caching dir
+	 */
+	public function purge_page_cache() {
+		if ( ! wp_verify_nonce( $_GET['_wpnonce'], 'powered_cache_purge_page_cache' ) ) {
+			wp_nonce_ays( '' );
+		}
+
+		if ( current_user_can( 'manage_options' ) ) {
+			clean_site_cache_dir();
+			$redirect_url = add_query_arg( 'pc_action', 'flush_page_cache', wp_get_referer() );
+		} else {
+			$redirect_url = add_query_arg( 'pc_action', 'flush_page_cache_err_permission', wp_get_referer() );
+		}
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+
+	/**
+	 * Purge post related page cache
+	 *
+	 * @param int $post_id Post ID
+	 *
+	 * @since 1.0
+	 */
+	public function purge_on_post_update( $post_id ) {
+		$current_post_status = get_post_status( $post_id );
+
+		$urls = array();
+
+		if ( in_array( $current_post_status, array( 'publish', 'trash' ), true ) ) {
+			$urls = get_post_related_urls( $post_id );
+
+			/**
+			 * Page cache purge urls.
+			 *
+			 * @hook   powered_cache_advanced_cache_purge_urls
+			 *
+			 * @param  {array} $urls The list of URLs that will purged
+			 * @param  {int} $post_id Post ID.
+			 *
+			 * @return {array} New value
+			 * @since  1.0
+			 */
+			$urls = apply_filters( 'powered_cache_advanced_cache_purge_urls', $urls, $post_id );
+
+			foreach ( $urls as $url ) {
+				delete_page_cache( $url );
+			}
+		}
+
+		/**
+		 * Fires after purging cache on post update.
+		 *
+		 * @hook  powered_cache_advanced_cache_purge_post
+		 *
+		 * @param {int} $post_id The Post ID.
+		 * @param {array} $urls The list of related urls with the updated post.
+		 *
+		 * @since 1.0
+		 */
+		do_action( 'powered_cache_advanced_cache_purge_post', $post_id, $urls );
+	}
+
+	/**
+	 * Delete page cache when post update
+	 *
+	 * @param int    $comment_id     Comment ID
+	 * @param string $comment_status Status of the comment
+	 *
+	 * @since 1.0
+	 */
+	public function purge_post_on_comment_status_change( $comment_id, $comment_status ) {
+		$comment  = get_comment( $comment_id );
+		$post_id  = $comment->comment_post_ID;
+		$post_url = get_permalink( $post_id );
+		delete_page_cache( $post_url );
+
+		/**
+		 * Fires after purging cache for a post that associated a comment
+		 *
+		 * @param {int} $post_id Post ID.
+		 * @param {string} $post_url Post permalink.
+		 * @param {int} $comment_id Comment ID.
+		 *
+		 * @since 2.0
+		 */
+		do_action( 'powered_cache_advanced_cache_purge_on_comment_status_change', $post_id, $post_url, $comment_id );
+	}
+
+	/**
+	 * Purge site when switching to a new theme
+	 *
+	 * @since 2.0
+	 */
+	public function purge_on_switch_theme() {
+		clean_site_cache_dir();
+	}
+
+	/**
+	 * Leave a cookie when commenting on a post as usual and don't show the cached page.
+	 * `comment_author_*` cookies are site-wide available.
+	 * Don't show cached results just for left a comment 5 months ago is not seems efficient here.
+	 *
+	 * @param object $comment Comment object
+	 * @param object $user    User Object
+	 *
+	 * @since 1.0
+	 */
+	public function set_comment_cookie( $comment, $user ) {
+		$post_id = $comment->comment_post_ID;
+		$path    = wp_parse_url( get_permalink( $post_id ), PHP_URL_PATH );
+		setcookie( 'powered_cache_commented_posts[' . $post_id . ']', $path, ( time() + DAY_IN_SECONDS * 30 ), $path );
+	}
+
+
+	/**
+	 * Adds custom pages to post related urls
+	 *
+	 * @param array $urls The list of the urls
+	 *
+	 * @return array urls
+	 * @since 1.1
+	 */
+	public function powered_cache_post_related_urls( $urls ) {
+		$settings = \PoweredCache\Utils\get_settings();
+
+		$additional_pages = $settings['purge_additional_pages'];
+
+		if ( empty( $additional_pages ) ) {
+			return $urls;
+		}
+
+		// we only need relative path
+		$additional_pages      = str_replace( site_url(), '', $additional_pages );
+		$additional_page_paths = explode( PHP_EOL, $additional_pages );
+		$additional_urls       = array();
+
+		foreach ( $additional_page_paths as $page ) {
+			$additional_urls[] = site_url( $page );
+		}
+
+		$urls = array_merge( $urls, $additional_urls );
+
+		return $urls;
+	}
+
+
+	/**
+	 * Get the list of rejected cookies
+	 *
+	 * @return mixed|void
+	 * @since 2.0
+	 */
+	public static function get_rejected_cookies() {
+		$settings = \PoweredCache\Utils\get_settings();
+		$cookies  = [];
+
+		if ( ! empty( $settings['rejected_cookies'] ) ) {
+			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_cookies'] );
+		}
+
+		$wp_cookies = [ 'wp-postpass', 'wordpressuser_', 'wordpresspass_', 'wordpress_sec_', 'wordpress_logged_in_', 'powered_cache_commented_posts' ];
+
+		if ( ! empty( $cookies ) ) {
+			$wp_cookies = array_merge( $cookies, $wp_cookies );
+		}
+
+		/**
+		 * Filter rejected cookie list.
+		 *
+		 * @hook   powered_cache_rejected_cookies
+		 *
+		 * @param  {array} $wp_cookies The rejected cookie list from the caching.
+		 *
+		 * @return {array} Rejected cookie list
+		 * @since  2.0
+		 */
+		return apply_filters( 'powered_cache_rejected_cookies', $wp_cookies );
+	}
+
+	/**
+	 * Get the list of rejected cookies
+	 *
+	 * @return mixed|void
+	 * @since 2.0
+	 */
+	public static function get_vary_cookies() {
+		$settings = \PoweredCache\Utils\get_settings();
+		$cookies  = [];
+
+		if ( ! empty( $settings['vary_cookies'] ) ) {
+			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['vary_cookies'] );
+		}
+
+		/**
+		 * Filter vary cookie list.
+		 *
+		 * @hook   powered_cache_vary_cookies
+		 *
+		 * @param  {array} $cookies The varied cookie list, which allows to create separate cache based on the match.
+		 *
+		 * @return {array} Vary cookie list
+		 * @since  2.0
+		 */
+		return apply_filters( 'powered_cache_vary_cookies', $cookies );
+	}
+
+
+	/**
+	 * Get the list of rejected user agents
+	 *
+	 * @return mixed|void
+	 * @since 2.0
+	 */
+	public static function get_rejected_user_agents() {
+		$settings             = \PoweredCache\Utils\get_settings();
+		$rejected_user_agents = [];
+
+		if ( ! empty( $settings['rejected_user_agents'] ) ) {
+			$rejected_user_agents = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_user_agents'] );
+		}
+
+		$rejected_user_agents[] = 'facebookexternalhit';
+
+		/**
+		 * Filter rejected user agent list.
+		 *
+		 * @hook   powered_cache_rejected_user_agents
+		 *
+		 * @param  {array} $rejected_user_agents The user agents that will not see the cached page.
+		 *
+		 * @return {array} Rejected user agent list.
+		 * @since  2.0
+		 */
+		return apply_filters( 'powered_cache_rejected_user_agents', $rejected_user_agents );
+	}
+
+	/**
+	 * Get the list of rejected uri that nerver get cached
+	 *
+	 * @return mixed|void
+	 * @since 2.0
+	 */
+	public static function get_rejected_uri() {
+		$settings          = \PoweredCache\Utils\get_settings();
+		$rejected_uri_list = [];
+
+		if ( ! empty( $settings['rejected_uri'] ) ) {
+			$rejected_uri_list = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_uri'] );
+		}
+
+		/**
+		 * Filter rejected uri list
+		 *
+		 * @hook   powered_cache_rejected_uri_list
+		 *
+		 * @param  {array} $rejected_uri_list The list of rejected uri that nerver get cached.
+		 *
+		 * @return {array} New value
+		 * @since  2.0
+		 */
+		return apply_filters( 'powered_cache_rejected_uri_list', $rejected_uri_list );
+	}
+
+
+	/**
+	 * These query strings will be ignored during the caching
+	 *
+	 * @return mixed|void
+	 */
+	public static function get_accepted_query_strings() {
+		$settings               = \PoweredCache\Utils\get_settings();
+		$accepted_query_strings = [];
+
+		if ( ! empty( $settings['accepted_query_strings'] ) ) {
+			$accepted_query_strings = preg_split( '#(\r\n|\r|\n)#', $settings['accepted_query_strings'] );
+		}
+
+		$query_strings = [
+			'fbclid',
+			'fb_action_ids',
+			'fb_action_types',
+			'ref',
+			'gclid',
+			'fb_source',
+			'utm_source',
+			'utm_medium',
+			'utm_campaign',
+			'utm_term',
+			'utm_content',
+			'utm_expid',
+			'_ga',
+			'mc_cid',
+			'mc_eid',
+			'campaignid',
+			'adgroupid',
+			'adid',
+			'age-verified',
+			'usqp',
+			'cn-reloaded',
+			'ao_noptimize',
+			'lang',
+		];
+
+		if ( ! empty( $accepted_query_strings ) ) {
+			$query_strings = array_merge( $query_strings, $accepted_query_strings );
+		}
+
+		/**
+		 * Filter accepted query strings.
+		 *
+		 * @hook   powered_cache_accepted_query_strings
+		 *
+		 * @param  {array} $query_strings The list of query strings will be ignored during the caching
+		 *
+		 * @return {array} New value
+		 * @since  2.0
+		 */
+		return apply_filters( 'powered_cache_accepted_query_strings', $query_strings );
+	}
+
+
+	/**
+	 * Disable caching of the individual page when it marked as dont' cache
+	 *
+	 * @param bool $status Cache status
+	 *
+	 * @return bool
+	 */
+	public function maybe_caching_disabled( $status ) {
+		if ( is_single() ) {
+			$is_cache_disabled = (bool) get_post_meta( get_the_ID(), POST_META_DISABLE_CACHE_KEY, true );
+			if ( $is_cache_disabled ) {
+				return false;
+			}
+		}
+
+		return $status;
+	}
+
+	/**
+	 * Maybe disable rewrite rules based on the settings
+	 *
+	 * @param bool $rewrite_status mod rewrite status
+	 *
+	 * @return bool
+	 * @since 2.0
+	 */
+	public function maybe_disable_mod_rewrite( $rewrite_status ) {
+		$vary_cookies = self::get_vary_cookies();
+		if ( ! empty( $vary_cookies ) ) {
+			$rewrite_status = false;
+		}
+
+		return $rewrite_status;
+	}
+
+}
+
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_admin_page_after_settings_nav.html">powered_cache_admin_page_after_settings_nav</a></li><li><a href="powered_cache_admin_page_before_file_optimization.html">powered_cache_admin_page_before_file_optimization</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
