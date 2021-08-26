@@ -58,6 +58,7 @@ class Install {
 
 		if ( ! $instance ) {
 			$instance = new self();
+			$instance->setup();
 		}
 
 		return $instance;
@@ -132,6 +133,8 @@ class Install {
 	public function maybe_upgrade() {
 		if ( version_compare( get_option( DB_VERSION_OPTION_NAME ), POWERED_CACHE_DB_VERSION, '&lt;' ) ) {
 			$this->maybe_migrate_from_1x();
+
+			\PoweredCache\Utils\log( sprintf( 'Upgrade DB version: %d', POWERED_CACHE_DB_VERSION ) );
 			update_option( DB_VERSION_OPTION_NAME, POWERED_CACHE_DB_VERSION );
 		}
 	}
@@ -204,6 +207,7 @@ class Install {
 		$default_options = \PoweredCache\Utils\get_settings();
 
 		if ( empty( $db_version ) &amp;&amp; ! empty( $old_options ) ) {
+			\PoweredCache\Utils\log( 'Upgrading from version 1.x' );
 			$migrated_options = [];
 
 			// migrate the settings with same key
@@ -223,7 +227,9 @@ class Install {
 			];
 
 			foreach ( $changed_keys as $old_key => $new_key ) {
-				$migrated_options[ $new_key ] = $old_options[ $old_key ];
+				if ( isset( $old_options[ $old_key ] ) ) {
+					$migrated_options[ $new_key ] = $old_options[ $old_key ];
+				}
 			}
 
 			$active_extensions  = (array) $old_options['active_extensions'];
@@ -275,6 +281,8 @@ class Install {
 
 			update_option( SETTING_OPTION, $migrated_options );
 			Config::factory()->save_configuration( $migrated_options ); // make it current
+
+			\PoweredCache\Utils\log( 'Upgraded from version 1.x' );
 
 			// remove old crons
 			wp_clear_scheduled_hook( 'powered_cache_preload_hook' );

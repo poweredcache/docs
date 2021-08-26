@@ -380,6 +380,10 @@ class Config {
 	 * @since 1.0
 	 */
 	public function configure_htaccess( $enable = true ) {
+		if ( ! function_exists( '\get_home_path' ) ) {
+			require_once ABSPATH . '/wp-admin/includes/file.php';
+		}
+
 		$htaccess_file = get_home_path() . '.htaccess';
 		$settings      = \PoweredCache\Utils\get_settings();
 

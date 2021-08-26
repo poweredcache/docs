@@ -313,7 +313,7 @@ class AdvancedCache {
 		$cookies  = [];
 
 		if ( ! empty( $settings['rejected_cookies'] ) ) {
-			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_cookies'] );
+			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_cookies'], - 1, PREG_SPLIT_NO_EMPTY );
 		}
 
 		$wp_cookies = [ 'wp-postpass', 'wordpressuser_', 'wordpresspass_', 'wordpress_sec_', 'wordpress_logged_in_', 'powered_cache_commented_posts' ];
@@ -346,7 +346,7 @@ class AdvancedCache {
 		$cookies  = [];
 
 		if ( ! empty( $settings['vary_cookies'] ) ) {
-			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['vary_cookies'] );
+			$cookies = preg_split( '#(\r\n|\r|\n)#', $settings['vary_cookies'], - 1, PREG_SPLIT_NO_EMPTY );
 		}
 
 		/**
@@ -374,7 +374,7 @@ class AdvancedCache {
 		$rejected_user_agents = [];
 
 		if ( ! empty( $settings['rejected_user_agents'] ) ) {
-			$rejected_user_agents = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_user_agents'] );
+			$rejected_user_agents = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_user_agents'], - 1, PREG_SPLIT_NO_EMPTY );
 		}
 
 		$rejected_user_agents[] = 'facebookexternalhit';
@@ -403,7 +403,7 @@ class AdvancedCache {
 		$rejected_uri_list = [];
 
 		if ( ! empty( $settings['rejected_uri'] ) ) {
-			$rejected_uri_list = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_uri'] );
+			$rejected_uri_list = preg_split( '#(\r\n|\r|\n)#', $settings['rejected_uri'], - 1, PREG_SPLIT_NO_EMPTY );
 		}
 
 		/**
@@ -430,7 +430,7 @@ class AdvancedCache {
 		$accepted_query_strings = [];
 
 		if ( ! empty( $settings['accepted_query_strings'] ) ) {
-			$accepted_query_strings = preg_split( '#(\r\n|\r|\n)#', $settings['accepted_query_strings'] );
+			$accepted_query_strings = preg_split( '#(\r\n|\r|\n)#', $settings['accepted_query_strings'], - 1, PREG_SPLIT_NO_EMPTY );
 		}
 
 		$query_strings = [

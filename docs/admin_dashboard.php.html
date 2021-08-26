@@ -83,6 +83,8 @@ function setup() {
 	add_action( 'admin_post_powered_cache_download_rewrite_settings', __NAMESPACE__ . '\\download_rewrite_config' );
 	add_action( 'wp_ajax_powered_cache_run_diagnostic', __NAMESPACE__ . '\\run_diagnostic' );
 	add_action( 'admin_post_deactivate_plugin', __NAMESPACE__ . '\\deactivate_plugin' );
+	add_filter( 'plugin_action_links_' . plugin_basename( POWERED_CACHE_PLUGIN_FILE ), __NAMESPACE__ . '\\action_links' );
+	add_filter( 'network_admin_plugin_action_links_' . plugin_basename( POWERED_CACHE_PLUGIN_FILE ), __NAMESPACE__ . '\\action_links' );
 }
 
 /**
@@ -756,6 +758,28 @@ function deactivate_plugin() {
 
 	wp_safe_redirect( wp_get_referer() );
 	die();
+}
+
+/**
+ * Adds settings link to plugin actions
+ *
+ * @param array $actions Plugin actions.
+ *
+ * @return array
+ * @since  1.0
+ */
+function action_links( $actions ) {
+
+	$settings_url      = POWERED_CACHE_IS_NETWORK ? network_admin_url( 'admin.php?page=powered-cache' ) : admin_url( 'admin.php?page=powered-cache' );
+	$powered_cache_url = 'https://poweredcache.com/?utm_source=wp_admin&amp;utm_medium=plugin&amp;utm_campaign=plugin_action_links';
+
+	$actions['powered_settings'] = sprintf( '&lt;a href="%s">%s&lt;/a>', esc_url( $settings_url ), esc_html__( 'Settings', 'powered-cache' ) );
+
+	if ( ! is_premium() ) {
+		$actions['get_premium'] = sprintf( '&lt;a href="%s" style="color: red;">%s&lt;/a>', esc_url( $powered_cache_url ), esc_html__( 'Get Premium', 'powered-cache' ) );
+	}
+
+	return array_reverse( $actions );
 }
 </code></pre>
         </article>

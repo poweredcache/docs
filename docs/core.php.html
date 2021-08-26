@@ -38,6 +38,7 @@ namespace PoweredCache\Core;
 use PoweredCache\Async\CachePreloader;
 use PoweredCache\Async\DatabaseOptimizer;
 use PoweredCache\Config;
+use const PoweredCache\Constants\DB_CLEANUP_COUNT_CACHE_KEY;
 use const PoweredCache\Constants\MENU_SLUG;
 use PoweredCache\Optimizer\JS;
 use \WP_Error as WP_Error;
@@ -119,6 +120,16 @@ function activate( $network_wide ) {
  */
 function deactivate( $network_wide ) {
 	Config::factory()->clean_up();
+
+	// cancel async jobs
+	$cache_preloader = CachePreloader::factory();
+	$cache_preloader->cancel_process();
+	$db_optimizer = DatabaseOptimizer::factory();
+	$db_optimizer->cancel_process();
+
+	// cleanup transients
+	delete_site_transient( DB_CLEANUP_COUNT_CACHE_KEY );
+	delete_transient( DB_CLEANUP_COUNT_CACHE_KEY );
 }
 
 
@@ -182,6 +193,8 @@ function admin_scripts() {
 		script_url( 'admin', 'admin' ),
 		[
 			'jquery',
+			'lodash',
+			'wp-i18n',
 		],
 		POWERED_CACHE_VERSION,
 		true
@@ -194,25 +207,32 @@ function admin_scripts() {
  * @since 2.0
  */
 function block_editor_assets() {
-	wp_enqueue_script(
-		'powered_cache_admin',
-		script_url( 'editor', 'admin' ),
-		[
-			'jquery',
-			'lodash',
-			'wp-i18n',
-			'wp-edit-post',
-			'wp-components',
-			'wp-compose',
-			'wp-data',
-			'wp-edit-post',
-			'wp-element',
-			'wp-i18n',
-			'wp-plugins',
-		],
-		POWERED_CACHE_VERSION,
-		true
-	);
+
+	/**
+	 * Min. WP 5.3 required for block editor plugin due to useSelect
+	 * Likely the older version of react didn't support hooks.
+	 * The post meta-box works with compat mode vice-versa...
+	 */
+	if ( version_compare( get_bloginfo( 'version' ), '5.3', '>=' ) ) {
+		wp_enqueue_script(
+			'powered_cache_admin',
+			script_url( 'editor', 'admin' ),
+			[
+				'jquery',
+				'lodash',
+				'wp-i18n',
+				'wp-edit-post',
+				'wp-components',
+				'wp-compose',
+				'wp-data',
+				'wp-edit-post',
+				'wp-element',
+				'wp-plugins',
+			],
+			POWERED_CACHE_VERSION,
+			true
+		);
+	}
 }
 
 /**

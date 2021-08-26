@@ -134,8 +134,11 @@ function maybe_display_advanced_cache_notices() {
 	$settings = \PoweredCache\Utils\get_settings();
 
 	if ( ! $settings['enable_page_cache'] ) {
+
+		$settings_page = POWERED_CACHE_IS_NETWORK ? network_admin_url( 'admin.php?page=powered-cache#basic-options' ) : admin_url( 'admin.php?page=powered-cache#basic-options' );
+
 		/* translators: %s: Powered Cache settings page URL */
-		$message = sprintf( __( '&lt;strong>Powered Cache:&lt;/strong> Page caching needs to be activated in order to speed up your website. Please activate it on &lt;a href="%s">settings page&lt;/a>', 'powered-cache' ), admin_url( 'admin.php?page=powered-cache#basic-options' ) );
+		$message = sprintf( __( '&lt;strong>Powered Cache:&lt;/strong> Page caching needs to be activated in order to speed up your website. Please activate it on &lt;a href="%s">settings page&lt;/a>', 'powered-cache' ), esc_url( $settings_page ) );
 		?>
 		&lt;div class="notice notice-warning">
 			&lt;p>
