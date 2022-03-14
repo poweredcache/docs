@@ -49,12 +49,12 @@ use function PoweredCache\Utils\cdn_zones;
 use function PoweredCache\Utils\clean_site_cache_dir;
 use function PoweredCache\Utils\get_available_object_caches;
 use function PoweredCache\Utils\get_cache_dir;
-use function PoweredCache\Utils\get_db_cleanup_counts;
 use function PoweredCache\Utils\get_timeout_with_interval;
 use function PoweredCache\Utils\is_premium;
 use function PoweredCache\Utils\js_execution_methods;
 use function PoweredCache\Utils\powered_cache_flush;
 use function PoweredCache\Utils\remove_dir;
+use function PoweredCache\Utils\sanitize_css;
 
 // phpcs:disable WordPress.WhiteSpace.PrecisionAlignment.Found
 // phpcs:disable Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed
@@ -96,7 +96,7 @@ function setup() {
  * @see https://wpmudev.github.io/shared-ui/installation/
  */
 function add_sui_admin_body_class( $classes ) {
-	$classes .= ' sui-2-12-2 ';
+	$classes .= ' sui-2-12-4 ';
 
 	return $classes;
 }
@@ -266,7 +266,7 @@ function process_form_submit() {
 			$redirect_url
 		);
 
-		wp_safe_redirect( $redirect_url );
+		wp_safe_redirect( esc_url_raw( $redirect_url ) );
 		exit;
 	}
 }
@@ -287,42 +287,45 @@ function sanitize_options( $options ) {
 		$sanitized_options['object_cache'] = 'off';
 	}
 
-	$sanitized_options['enable_page_cache']           = ! empty( $options['enable_page_cache'] );
-	$sanitized_options['cache_mobile']                = ! empty( $options['cache_mobile'] );
-	$sanitized_options['cache_mobile_separate_file']  = ! empty( $options['cache_mobile_separate_file'] );
-	$sanitized_options['loggedin_user_cache']         = ! empty( $options['loggedin_user_cache'] );
-	$sanitized_options['gzip_compression']            = ! empty( $options['gzip_compression'] );
-	$sanitized_options['cache_timeout']               = absint( $options['cache_timeout'] );
-	$sanitized_options['auto_configure_htaccess']     = ! empty( $options['auto_configure_htaccess'] );
-	$sanitized_options['rejected_user_agents']        = sanitize_textarea_field( $options['rejected_user_agents'] );
-	$sanitized_options['rejected_cookies']            = sanitize_textarea_field( $options['rejected_cookies'] );
-	$sanitized_options['vary_cookies']                = sanitize_textarea_field( $options['vary_cookies'] );
-	$sanitized_options['rejected_uri']                = sanitize_textarea_field( $options['rejected_uri'] );
-	$sanitized_options['accepted_query_strings']      = sanitize_textarea_field( $options['accepted_query_strings'] );
-	$sanitized_options['purge_additional_pages']      = sanitize_textarea_field( $options['purge_additional_pages'] );
-	$sanitized_options['purge_additional_pages']      = sanitize_textarea_field( $options['purge_additional_pages'] );
-	$sanitized_options['minify_html']                 = ! empty( $options['minify_html'] );
-	$sanitized_options['combine_google_fonts']        = ! empty( $options['combine_google_fonts'] );
-	$sanitized_options['minify_css']                  = ! empty( $options['minify_css'] );
-	$sanitized_options['combine_css']                 = ! empty( $options['combine_css'] );
-	$sanitized_options['excluded_css_files']          = sanitize_textarea_field( $options['excluded_css_files'] );
-	$sanitized_options['minify_js']                   = ! empty( $options['minify_js'] );
-	$sanitized_options['combine_js']                  = ! empty( $options['combine_js'] );
-	$sanitized_options['excluded_js_files']           = sanitize_textarea_field( $options['excluded_js_files'] );
-	$sanitized_options['excluded_js_files']           = sanitize_textarea_field( $options['excluded_js_files'] );
-	$sanitized_options['js_execution_method']         = sanitize_text_field( $options['js_execution_method'] );
-	$sanitized_options['js_execution_optimized_only'] = ! empty( $options['js_execution_optimized_only'] );
-	$sanitized_options['enable_lazy_load']            = ! empty( $options['enable_lazy_load'] );
-	$sanitized_options['lazy_load_post_content']      = ! empty( $options['lazy_load_post_content'] );
-	$sanitized_options['lazy_load_images']            = ! empty( $options['lazy_load_images'] );
-	$sanitized_options['lazy_load_iframes']           = ! empty( $options['lazy_load_iframes'] );
-	$sanitized_options['lazy_load_widgets']           = ! empty( $options['lazy_load_widgets'] );
-	$sanitized_options['lazy_load_post_thumbnail']    = ! empty( $options['lazy_load_post_thumbnail'] );
-	$sanitized_options['lazy_load_avatars']           = ! empty( $options['lazy_load_avatars'] );
-	$sanitized_options['disable_wp_lazy_load']        = ! empty( $options['disable_wp_lazy_load'] );
-	$sanitized_options['disable_wp_embeds']           = ! empty( $options['disable_wp_embeds'] );
-	$sanitized_options['disable_emoji_scripts']       = ! empty( $options['disable_emoji_scripts'] );
-	$sanitized_options['enable_cdn']                  = ! empty( $options['enable_cdn'] );
+	$sanitized_options['enable_page_cache']             = ! empty( $options['enable_page_cache'] );
+	$sanitized_options['cache_mobile']                  = ! empty( $options['cache_mobile'] );
+	$sanitized_options['cache_mobile_separate_file']    = ! empty( $options['cache_mobile_separate_file'] );
+	$sanitized_options['loggedin_user_cache']           = ! empty( $options['loggedin_user_cache'] );
+	$sanitized_options['gzip_compression']              = ! empty( $options['gzip_compression'] );
+	$sanitized_options['cache_timeout']                 = absint( $options['cache_timeout'] );
+	$sanitized_options['auto_configure_htaccess']       = ! empty( $options['auto_configure_htaccess'] );
+	$sanitized_options['rejected_user_agents']          = sanitize_textarea_field( $options['rejected_user_agents'] );
+	$sanitized_options['rejected_cookies']              = sanitize_textarea_field( $options['rejected_cookies'] );
+	$sanitized_options['vary_cookies']                  = sanitize_textarea_field( $options['vary_cookies'] );
+	$sanitized_options['rejected_uri']                  = sanitize_textarea_field( $options['rejected_uri'] );
+	$sanitized_options['accepted_query_strings']        = sanitize_textarea_field( $options['accepted_query_strings'] );
+	$sanitized_options['purge_additional_pages']        = sanitize_textarea_field( $options['purge_additional_pages'] );
+	$sanitized_options['purge_additional_pages']        = sanitize_textarea_field( $options['purge_additional_pages'] );
+	$sanitized_options['minify_html']                   = ! empty( $options['minify_html'] );
+	$sanitized_options['combine_google_fonts']          = ! empty( $options['combine_google_fonts'] );
+	$sanitized_options['minify_css']                    = ! empty( $options['minify_css'] );
+	$sanitized_options['combine_css']                   = ! empty( $options['combine_css'] );
+	$sanitized_options['critical_css']                  = ! empty( $options['critical_css'] );
+	$sanitized_options['critical_css_additional_files'] = sanitize_textarea_field( $options['critical_css_additional_files'] );
+	$sanitized_options['critical_css_excluded_files']   = sanitize_textarea_field( $options['critical_css_excluded_files'] );
+	$sanitized_options['excluded_css_files']            = sanitize_textarea_field( $options['excluded_css_files'] );
+	$sanitized_options['minify_js']                     = ! empty( $options['minify_js'] );
+	$sanitized_options['combine_js']                    = ! empty( $options['combine_js'] );
+	$sanitized_options['excluded_js_files']             = sanitize_textarea_field( $options['excluded_js_files'] );
+	$sanitized_options['excluded_js_files']             = sanitize_textarea_field( $options['excluded_js_files'] );
+	$sanitized_options['js_execution_method']           = sanitize_text_field( $options['js_execution_method'] );
+	$sanitized_options['js_execution_optimized_only']   = ! empty( $options['js_execution_optimized_only'] );
+	$sanitized_options['enable_lazy_load']              = ! empty( $options['enable_lazy_load'] );
+	$sanitized_options['lazy_load_post_content']        = ! empty( $options['lazy_load_post_content'] );
+	$sanitized_options['lazy_load_images']              = ! empty( $options['lazy_load_images'] );
+	$sanitized_options['lazy_load_iframes']             = ! empty( $options['lazy_load_iframes'] );
+	$sanitized_options['lazy_load_widgets']             = ! empty( $options['lazy_load_widgets'] );
+	$sanitized_options['lazy_load_post_thumbnail']      = ! empty( $options['lazy_load_post_thumbnail'] );
+	$sanitized_options['lazy_load_avatars']             = ! empty( $options['lazy_load_avatars'] );
+	$sanitized_options['disable_wp_lazy_load']          = ! empty( $options['disable_wp_lazy_load'] );
+	$sanitized_options['disable_wp_embeds']             = ! empty( $options['disable_wp_embeds'] );
+	$sanitized_options['disable_emoji_scripts']         = ! empty( $options['disable_emoji_scripts'] );
+	$sanitized_options['enable_cdn']                    = ! empty( $options['enable_cdn'] );
 
 	// convert TTL in minute
 	if ( $options['cache_timeout'] > 0 &amp;&amp; isset( $options['cache_timeout_interval'] ) ) {
@@ -390,6 +393,14 @@ function sanitize_options( $options ) {
 	$sanitized_options['cache_footprint']                = ! empty( $options['cache_footprint'] );
 	$sanitized_options['enable_google_tracking']         = ! empty( $options['enable_google_tracking'] );
 	$sanitized_options['enable_fb_tracking']             = ! empty( $options['enable_fb_tracking'] );
+
+	if ( isset( $options['critical_css_appended_content'] ) ) {
+		$sanitized_options['critical_css_appended_content'] = sanitize_css( $options['critical_css_appended_content'] );
+	}
+
+	if ( isset( $options['critical_css_fallback'] ) ) {
+		$sanitized_options['critical_css_fallback'] = sanitize_css( $options['critical_css_fallback'] );
+	}
 
 	/**
 	 * Filters sanitized options.
@@ -461,6 +472,8 @@ function maybe_display_message() {
 		'flush_object_cache'         => esc_html__( 'Object cache deleted successfully!', 'powered-cache' ),
 		'flush_all_cache'            => esc_html__( 'All cached items flushed successfully!', 'powered-cache' ),
 		'start_preload'              => esc_html__( 'The cache preloading has been initialized!', 'powered-cache' ),
+		'generate_critical'          => esc_html__( 'The Critical CSS generation process has been initialized!', 'powered-cache' ),
+		'generate_critical_network'  => esc_html__( 'The Critical CSS generation process has been initialized for all sites! This might take a while, depending on the network size.', 'powered-cache' ),
 		'flush_cf_cache'             => esc_html__( 'Cloudflare cache flushed, it can take up to 30 seconds to delete all cache from Cloudflare!', 'powered-cache' ),
 		'reset_settings'             => esc_html__( 'Settings have been reset!', 'powered-cache' ),
 		'import_settings'            => esc_html__( 'Settings have been imported!', 'powered-cache' ),
@@ -469,11 +482,14 @@ function maybe_display_message() {
 	];
 
 	$err_messages = [
+		'generic_permission_err'                  => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
 		'flush_page_cache_network_err_permission' => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
 		'flush_page_cache_err_permission'         => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
 		'flush_object_cache_err_permission'       => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
 		'flush_all_cache_err_permission'          => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
 		'start_preload_err_permission'            => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
+		'start_critical_err_permission'           => esc_html__( 'You don\'t have permission to perform this action!', 'powered-cache' ),
+		'start_critical_err_license'              => esc_html__( 'Your license key does not seem valid. A valid license is required for the Critical CSS!', 'powered-cache' ),
 		'flush_cf_cache_failed'                   => esc_html__( 'Could not flush Cloudflare cache. Please make sure you entered the correct credentials and zone id!', 'powered-cache' ),
 	];
 
@@ -536,8 +552,13 @@ function purge_all_cache() {
 
 	if ( is_multisite() &amp;&amp; ! current_user_can( 'manage_network' ) ) {
 		$redirect_url = add_query_arg( 'pc_action', 'flush_all_cache_err_permission', wp_get_referer() );
+		wp_safe_redirect( esc_url_raw( $redirect_url ) );
+		exit;
+	}
 
-		wp_safe_redirect( $redirect_url );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		$redirect_url = add_query_arg( 'pc_action', 'flush_all_cache_err_permission', wp_get_referer() );
+		wp_safe_redirect( esc_url_raw( $redirect_url ) );
 		exit;
 	}
 
@@ -554,7 +575,7 @@ function purge_all_cache() {
 
 	$redirect_url = add_query_arg( 'pc_action', 'flush_all_cache', wp_get_referer() );
 
-	wp_safe_redirect( $redirect_url );
+	wp_safe_redirect( esc_url_raw( $redirect_url ) );
 	exit;
 }
 
@@ -570,7 +591,8 @@ function download_rewrite_config() {
 	}
 
 	if ( ! can_control_all_settings() ) {
-		wp_safe_redirect( wp_get_referer() );
+		$redirect_url = add_query_arg( 'pc_action', 'generic_permission_err', wp_get_referer() );
+		wp_safe_redirect( esc_url_raw( $redirect_url ) );
 		exit;
 	}
 
@@ -750,7 +772,8 @@ function deactivate_plugin() {
 	}
 
 	if ( ! current_user_can( 'activate_plugins' ) ) {
-		wp_safe_redirect( wp_get_referer() );
+		$redirect_url = add_query_arg( 'pc_action', 'generic_permission_err', wp_get_referer() );
+		wp_safe_redirect( esc_url_raw( $redirect_url ) );
 		exit;
 	}
 
@@ -791,7 +814,7 @@ function action_links( $actions ) {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_admin_page_after_settings_nav.html">powered_cache_admin_page_after_settings_nav</a></li><li><a href="powered_cache_admin_page_before_file_optimization.html">powered_cache_admin_page_before_file_optimization</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_admin_page_after_settings_nav.html">powered_cache_admin_page_after_settings_nav</a></li><li><a href="powered_cache_admin_page_before_file_optimization.html">powered_cache_admin_page_before_file_optimization</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_disable.html">powered_cache_cdn_disable</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
 </nav>
 
 <br class="clear">

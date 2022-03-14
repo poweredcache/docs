@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Action: powered_cache_get_url_dir</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_cdn_disable</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Action: powered_cache_get_url_dir</h1>
+    <h1 class="page-title">Filter: powered_cache_cdn_disable</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_get_url_dir">do_action( 'powered_cache_get_url_dir', <span class="signature">$path )</span><span class="type-signature"></span></h4>
+    <h4 class="name" id="powered_cache_cdn_disable">apply_filters( 'powered_cache_cdn_disable', <span class="signature">False )</span><span class="type-signature"> &rarr; {array}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters the path of the given url in the cache directory.</p>
+    <p>Filters CDN integration</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>$path</code></td>
+                <td class="name"><code>False</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">string</span>
+<span class="param-type">boolean</span>
 
 
             
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>The cache directory of the given URL.</p></td>
+            <td class="description last"><p>by default.</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>1.1</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>2.1</li></ul></dd>
     
 
     
@@ -139,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="utils.php.html">utils.php</a>, <a href="utils.php.html#line824">line 824</a>
+        <a href="classes_CDN.php.html">classes/CDN.php</a>, <a href="classes_CDN.php.html#line51">line 51</a>
     </li></ul></dd>
     
 
@@ -162,6 +162,28 @@
 
 
 
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>New value.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">array</span>
+
+
+    </dd>
+</dl>
+
+    
 
 
 
