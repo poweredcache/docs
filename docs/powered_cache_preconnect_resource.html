@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Filter: powered_cache_cdn_image_extensions</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_preconnect_resource</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Filter: powered_cache_cdn_image_extensions</h1>
+    <h1 class="page-title">Filter: powered_cache_preconnect_resource</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_cdn_image_extensions">apply_filters( 'powered_cache_cdn_image_extensions', <span class="signature">$image_extensions )</span><span class="type-signature"> &rarr; {array}</span></h4>
+    <h4 class="name" id="powered_cache_preconnect_resource">apply_filters( 'powered_cache_preconnect_resource', <span class="signature">$preconnect_resources )</span><span class="type-signature"> &rarr; {array}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters supported image extensions.</p>
+    <p>Filters Preconnect  resource list.</p>
 </div>
 
 
@@ -79,7 +79,7 @@
 
         <tr>
             
-                <td class="name"><code>$image_extensions</code></td>
+                <td class="name"><code>$preconnect_resources</code></td>
             
 
             <td class="type">
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>Supported image extensions.</p></td>
+            <td class="description last"><p>The list of prefetch domains.</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>1.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>2.2</li></ul></dd>
     
 
     
@@ -126,8 +126,6 @@
 
     
 
-    
-        <dt class="important tag-deprecated">Deprecated:</dt><dd><ul class="dummy"><li>since 2.2. Use powered_cache_cdn_extensions instead.</li></ul></dd>
     
 
     
@@ -141,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_CDN.php.html">classes/CDN.php</a>, <a href="classes_CDN.php.html#line348">line 348</a>
+        <a href="classes_Preloader.php.html">classes/Preloader.php</a>, <a href="classes_Preloader.php.html#line530">line 530</a>
     </li></ul></dd>
     
 
