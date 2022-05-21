@@ -1881,32 +1881,53 @@ $settings = \PoweredCache\Utils\get_settings();
 								&lt;p>&lt;?php esc_html_e( 'Cloudflare extension for PoweredCache. It allows to purge Cloudflare cache within WordPress.', 'powered-cache' ); ?>&lt;/p>
 								&lt;div id="cloudflare-details" style="&lt;?php echo( ! $settings['enable_cloudflare'] ? 'display:none' : '' ); ?>">
 									&lt;div class="sui-form-field">
-
-										&lt;label for="cloudflare-email" id="cloudflare-email-label" class="sui-label">&lt;?php esc_html_e( 'Cloudflare Email', 'powered-cache' ); ?>&lt;/label>
+										&lt;label for="cloudflare-api-token" id="cloudflare-api-token-label" class="sui-label">&lt;?php esc_html_e( 'API Token', 'powered-cache' ); ?>&lt;/label>
 										&lt;input
-												placeholder="john@example.com"
-												name="cloudflare_email"
-												value="&lt;?php echo esc_attr( $settings['cloudflare_email'] ); ?>"
-												id="cloudflare-email"
+												name="cloudflare_api_token"
+												value="&lt;?php echo esc_attr( $settings['cloudflare_api_token'] ); ?>"
+												id="cloudflare-api-token"
 												class="sui-form-control"
 										/>
+										&lt;span id="cloudflare_api_token_description" class="sui-description">
+											&lt;?php esc_html_e( 'Recommended authentication method.', 'powered-cache' ); ?>
+											&lt;a href="&lt;?php echo esc_url( 'https://dash.cloudflare.com/profile/api-tokens' ); ?>" rel="noopener" target="_blank">
+												&lt;?php esc_html_e( 'Create a new token', 'powered-cache' ); ?>
+											&lt;/a>
+											&lt;?php esc_html_e( 'Or you can enter Cloudflare email and API Key.', 'powered-cache' ); ?>
+										&lt;/span>
 									&lt;/div>
 
+
+										&lt;div id="cloudflare-api-details" class="sui-row" style="&lt;?php echo( ! empty( $settings['cloudflare_api_token'] ) ? 'display:none' : '' ); ?>">
+											&lt;div class="sui-col">
+												&lt;div class="sui-form-field">
+													&lt;label for="cloudflare-email" id="cloudflare-email-label" class="sui-label">&lt;?php esc_html_e( 'Cloudflare Email', 'powered-cache' ); ?>&lt;/label>
+													&lt;input
+															placeholder="john@example.com"
+															name="cloudflare_email"
+															value="&lt;?php echo esc_attr( $settings['cloudflare_email'] ); ?>"
+															id="cloudflare-email"
+															class="sui-form-control"
+													/>
+												&lt;/div>
+											&lt;/div>
+
+											&lt;div class="sui-col">
+												&lt;div class="sui-form-field">
+													&lt;label for="cloudflare-api-key" id="cloudflare-api-key-label" class="sui-label">&lt;?php esc_html_e( 'API Key', 'powered-cache' ); ?>&lt;/label>
+													&lt;input
+															name="cloudflare_api_key"
+															value="&lt;?php echo esc_attr( $settings['cloudflare_api_key'] ); ?>"
+															id="cloudflare-api-key"
+															class="sui-form-control"
+															type="password"
+													/>
+												&lt;/div>
+											&lt;/div>
+										&lt;/div>
+
+
 									&lt;div class="sui-form-field">
-
-										&lt;label for="cloudflare-api-key" id="cloudflare-api-key-label" class="sui-label">&lt;?php esc_html_e( 'API Key', 'powered-cache' ); ?>&lt;/label>
-
-										&lt;input
-												name="cloudflare_api_key"
-												value="&lt;?php echo esc_attr( $settings['cloudflare_api_key'] ); ?>"
-												id="cloudflare-api-key"
-												class="sui-form-control"
-												type="password"
-										/>
-									&lt;/div>
-
-									&lt;div class="sui-form-field">
-
 										&lt;label for="cloudflare-zone" id="cloudflare-zone-label" class="sui-label">&lt;?php esc_html_e( 'Zone ID', 'powered-cache' ); ?>&lt;/label>
 
 										&lt;input
@@ -2347,6 +2368,39 @@ $settings = \PoweredCache\Utils\get_settings();
 							&lt;/div>
 						&lt;/div>
 					&lt;/div>
+
+					&lt;div class="sui-box-settings-row">
+						&lt;div class="sui-box-settings-col-1">
+							&lt;span class="sui-settings-label">&lt;?php esc_html_e( 'Async Cache Cleaning', 'powered-cache' ); ?>
+								&lt;span class="sui-tag sui-tag-pro">&lt;?php esc_html_e( 'Experimental', 'powered-cache' ); ?>&lt;/span>
+							&lt;/span>
+
+							&lt;span class="sui-description">&lt;/span>
+						&lt;/div>
+
+						&lt;div class="sui-box-settings-col-2">
+							&lt;div class="sui-form-field">
+								&lt;label for="async_cache_cleaning" class="sui-toggle">
+									&lt;input
+											type="checkbox"
+											id="async_cache_cleaning"
+											name="async_cache_cleaning"
+											aria-labelledby="async_cache_cleaning_label"
+											aria-describedby="enable_async_cache_cleaning_description"
+											value="1"
+										&lt;?php checked( 1, $settings['async_cache_cleaning'] ); ?>
+									>
+									&lt;span class="sui-toggle-slider" aria-hidden="true">&lt;/span>
+									&lt;span id="enable_async_cache_cleaning_label" class="sui-toggle-label">&lt;?php esc_html_e( 'Enable async cache clean-up.', 'powered-cache' ); ?>&lt;/span>
+									&lt;span id="enable_async_cache_cleaning_description" class="sui-description">&lt;?php esc_html_e( 'On large sites, it might take a longer time to perform cache purging actions. This option allows performing clean-up tasks in async background processes.', 'powered-cache' ); ?>
+										&lt;i>(&lt;?php esc_html_e( 'This is an experimental feature, use it wisely. It might conflict with preloading functionality since both features work in the background.', 'powered-cache' ); ?>)&lt;/i>
+									&lt;/span>
+								&lt;/label>
+							&lt;/div>
+						&lt;/div>
+					&lt;/div>
+
+
 					&lt;?php if ( can_control_all_settings() ) : ?>
 						&lt;div class="sui-box-settings-row">
 							&lt;div class="sui-box-settings-col-1">
