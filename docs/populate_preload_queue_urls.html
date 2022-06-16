@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Action: powered_cache_create_config_file</title>
+    <title>PoweredCache Hooks: Filter: populate_preload_queue_urls</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Action: powered_cache_create_config_file</h1>
+    <h1 class="page-title">Filter: populate_preload_queue_urls</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_create_config_file">do_action( 'powered_cache_create_config_file', <span class="signature">$config_file, $config_file_string, $network_wide )</span><span class="type-signature"></span></h4>
+    <h4 class="name" id="populate_preload_queue_urls">apply_filters( 'populate_preload_queue_urls', <span class="signature">$preload_urls )</span><span class="type-signature"> &rarr; {array}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Fires before writing configuration file.</p>
+    <p>Filters preload urls before sending to queue</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>$config_file</code></td>
+                <td class="name"><code>$preload_urls</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">string</span>
+<span class="param-type">array</span>
 
 
             
@@ -95,53 +95,7 @@
 
             
 
-            <td class="description last"><p>The path of the configuration file.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>$config_file_string</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>The contents of the configurations.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>$network_wide</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">bool</span>
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>Whether network-wide configuration or not.</p></td>
+            <td class="description last"><p>The list of preload urls</p></td>
         </tr>
 
     
@@ -159,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>2.4</li></ul></dd>
     
 
     
@@ -185,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_Config.php.html">classes/Config.php</a>, <a href="classes_Config.php.html#line783">line 783</a>
+        <a href="classes_Preloader.php.html">classes/Preloader.php</a>, <a href="classes_Preloader.php.html#line201">line 201</a>
     </li></ul></dd>
     
 
@@ -208,6 +162,28 @@
 
 
 
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>New value.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">array</span>
+
+
+    </dd>
+</dl>
+
+    
 
 
 
