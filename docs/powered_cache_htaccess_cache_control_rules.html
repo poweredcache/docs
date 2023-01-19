@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Filter: populate_preload_queue_urls</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_htaccess_cache_control_rules</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Filter: populate_preload_queue_urls</h1>
+    <h1 class="page-title">Filter: powered_cache_htaccess_cache_control_rules</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="populate_preload_queue_urls">apply_filters( 'populate_preload_queue_urls', <span class="signature">$preload_urls )</span><span class="type-signature"> &rarr; {array}</span></h4>
+    <h4 class="name" id="powered_cache_htaccess_cache_control_rules">apply_filters( 'powered_cache_htaccess_cache_control_rules', <span class="signature">$rules )</span><span class="type-signature"> &rarr; {string}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters preload urls before sending to queue</p>
+    <p>Filters cache control rules</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>$preload_urls</code></td>
+                <td class="name"><code>$rules</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">array</span>
+<span class="param-type">string</span>
 
 
             
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>The list of preload urls</p></td>
+            <td class="description last"><p>cache control</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.4</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>2.5</li></ul></dd>
     
 
     
@@ -139,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_Preloader.php.html">classes/Preloader.php</a>, <a href="classes_Preloader.php.html#line201">line 201</a>
+        <a href="classes_Htaccess.php.html">classes/Htaccess.php</a>, <a href="classes_Htaccess.php.html#line550">line 550</a>
     </li></ul></dd>
     
 
@@ -177,7 +177,7 @@
     </dt>
     <dd>
         
-<span class="param-type">array</span>
+<span class="param-type">string</span>
 
 
     </dd>
