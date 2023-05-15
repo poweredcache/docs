@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Action: powered_cache_post_related_urls</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_fo_google_fonts_domain</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Action: powered_cache_post_related_urls</h1>
+    <h1 class="page-title">Filter: powered_cache_fo_google_fonts_domain</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_post_related_urls">do_action( 'powered_cache_post_related_urls', <span class="signature">$related_urls )</span><span class="type-signature"></span></h4>
+    <h4 class="name" id="powered_cache_fo_google_fonts_domain">apply_filters( 'powered_cache_fo_google_fonts_domain', <span class="signature">$font_display )</span><span class="type-signature"> &rarr; {string}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters post related urls.</p>
+    <p>Filters google font's domain</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>$related_urls</code></td>
+                <td class="name"><code>$font_display</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">array</span>
+<span class="param-type">string</span>
 
 
             
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>The list of the URLs that related with the post.</p></td>
+            <td class="description last"><p>font display attribute.</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>1.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>3.0</li></ul></dd>
     
 
     
@@ -139,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="utils.php.html">utils.php</a>, <a href="utils.php.html#line767">line 767</a>
+        <a href="classes_FileOptimizer.php.html">classes/FileOptimizer.php</a>, <a href="classes_FileOptimizer.php.html#line577">line 577</a>
     </li></ul></dd>
     
 
@@ -162,6 +162,28 @@
 
 
 
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>New value.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+
+    
 
 
 
