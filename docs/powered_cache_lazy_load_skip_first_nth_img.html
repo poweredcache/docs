@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Filter: powered_cache_cache_purge_interval</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_lazy_load_skip_first_nth_img</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Filter: powered_cache_cache_purge_interval</h1>
+    <h1 class="page-title">Filter: powered_cache_lazy_load_skip_first_nth_img</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_cache_purge_interval">apply_filters( 'powered_cache_cache_purge_interval', <span class="signature">TTL )</span><span class="type-signature"> &rarr; {int}</span></h4>
+    <h4 class="name" id="powered_cache_lazy_load_skip_first_nth_img">apply_filters( 'powered_cache_lazy_load_skip_first_nth_img', <span class="signature">$immediate_load_count )</span><span class="type-signature"> &rarr; {int}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters page cache purge interval</p>
+    <p>Filters the count of images that skipped from lazyload.</p>
 </div>
 
 
@@ -79,7 +79,7 @@
 
         <tr>
             
-                <td class="name"><code>TTL</code></td>
+                <td class="name"><code>$immediate_load_count</code></td>
             
 
             <td class="type">
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>in seconds.</p></td>
+            <td class="description last"><p>Default image count</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>3.1</li></ul></dd>
     
 
     
@@ -139,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_Cron.php.html">classes/Cron.php</a>, <a href="classes_Cron.php.html#line59">line 59</a>
+        <a href="classes_LazyLoad.php.html">classes/LazyLoad.php</a>, <a href="classes_LazyLoad.php.html#line128">line 128</a>
     </li></ul></dd>
     
 
@@ -166,7 +166,7 @@
 
         
 <div class="param-desc">
-    <p>New value.</p>
+    <p>New value</p>
 </div>
 
 
