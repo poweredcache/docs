@@ -609,6 +609,7 @@ $settings = \PoweredCache\Utils\get_settings();
 											id="minify_html"
 											name="minify_html"
 											aria-labelledby="minify_html_label"
+											aria-controls="minify_html_dom_optimization_control"
 											value="1"
 										&lt;?php checked( 1, $settings['minify_html'] ); ?>
 									>
@@ -616,6 +617,25 @@ $settings = \PoweredCache\Utils\get_settings();
 									&lt;span id="minify_html_label" class="sui-toggle-label">&lt;?php esc_html_e( 'Minify HTML', 'powered-cache' ); ?>&lt;/span>
 									&lt;span id="minify_html_label_description" class="sui-description">&lt;?php esc_html_e( 'Removes all whitespace characters from the HTML output, minimizing the HTML size.', 'powered-cache' ); ?>&lt;/span>
 								&lt;/label>
+							&lt;/div>
+
+							&lt;div style=" &lt;?php echo( ! $settings['minify_html'] ? 'display:none' : '' ); ?>" tabindex="0" id="minify_html_dom_optimization_control">
+								&lt;div class="sui-form-field">
+									&lt;label for="minify_html_dom_optimization" class="sui-toggle">
+										&lt;input type="checkbox"
+											   value="1"
+											   name="minify_html_dom_optimization"
+											   id="minify_html_dom_optimization"
+											&lt;?php checked( 1, $settings['minify_html_dom_optimization'] ); ?>
+										>
+										&lt;span class="sui-toggle-slider" aria-hidden="true">&lt;/span>
+										&lt;span id="minify_html_dom_optimization_label" class="sui-toggle-label">&lt;?php esc_html_e( 'Optimize HTML via Dom Parser', 'powered-cache' ); ?>&lt;/span>
+										&lt;span id="minify_html_dom_optimization_description" class="sui-description">
+											&lt;?php esc_html_e( 'Improves HTML minification efficiency.', 'powered-cache' ); ?>
+										&lt;/span>
+									&lt;/label>
+									&lt;br>
+								&lt;/div>
 							&lt;/div>
 
 							&lt;div class="sui-form-field">
@@ -1084,6 +1104,38 @@ js-(before|after|extra)&lt;/pre>
 
 						&lt;/div>
 					&lt;/div>
+
+
+					&lt;?php if ( can_control_all_settings() ) : ?>
+						&lt;div class="sui-box-settings-row">
+							&lt;div class="sui-box-settings-col-1">
+								&lt;span class="sui-settings-label">&lt;?php esc_html_e( 'Rewrite File Optimizer', 'powered-cache' ); ?>&lt;/span>
+								&lt;span class="sui-description">&lt;/span>
+							&lt;/div>
+
+							&lt;div class="sui-box-settings-col-2">
+								&lt;div class="sui-form-field">
+									&lt;label for="rewrite_file_optimizer" id="rewrite_file_optimizer_label" class="sui-toggle">
+										&lt;input
+											type="checkbox"
+											id="rewrite_file_optimizer"
+											name="rewrite_file_optimizer"
+											aria-labelledby="rewrite_file_optimizer_label"
+											aria-describedby="enable_rewrite_file_optimizer_description"
+											value="1"
+											&lt;?php checked( 1, $settings['rewrite_file_optimizer'] ); ?>
+										>
+										&lt;span class="sui-toggle-slider" aria-hidden="true">&lt;/span>
+										&lt;span id="enable_rewrite_file_optimizer_label" class="sui-toggle-label">&lt;?php esc_html_e( 'Enable rewrite for file optimizer.', 'powered-cache' ); ?>&lt;/span>
+										&lt;span id="enable_rewrite_file_optimizer_description" class="sui-description">
+											&lt;?php echo wp_kses_post( __( 'This feature uses &lt;code>/_static/??&lt;/code> instead &lt;code>file-optimizer.php??&lt;/code> for file optimization requests. If automatic .htaccess configuration is enabled, the necessary settings will be applied automatically. If not, you will need to manually add the appropriate rewrite rules.&lt;/a>', 'powered-cache' ) ); ?>
+											&lt;a href="&lt;?php echo esc_url( get_doc_url( 'rewrite-file-optimizer' ) ); ?>" target="_blank">&lt;?php esc_html_e( '(?)', 'powered-cache' ); ?>&lt;/a>
+										&lt;/span>
+									&lt;/label>
+								&lt;/div>
+							&lt;/div>
+						&lt;/div>
+					&lt;?php endif; ?>
 
 
 				&lt;/div>
