@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Action: powered_cache_admin_page_before_file_optimization</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_delayed_js_script_loader</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Action: powered_cache_admin_page_before_file_optimization</h1>
+    <h1 class="page-title">Filter: powered_cache_delayed_js_script_loader</h1>
 
     
 
@@ -38,20 +38,115 @@
 
     
 
-    <h4 class="name" id="powered_cache_admin_page_before_file_optimization">do_action( 'powered_cache_admin_page_before_file_optimization' )</h4>
+    <h4 class="name" id="powered_cache_delayed_js_script_loader">apply_filters( 'powered_cache_delayed_js_script_loader', <span class="signature">$script_loader, $html, $delay_timeout )</span><span class="type-signature"> &rarr; {string}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Fires before file optimization section</p>
+    <p>Delayed JS script loader content</p>
 </div>
 
 
 
 
 
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>$script_loader</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Delayed JS script loader content</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>$html</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>HTML buffer</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>$delay_timeout</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">int</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Delay time in milliseconds</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
 
 
 
@@ -64,7 +159,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>3.4</li></ul></dd>
     
 
     
@@ -90,7 +185,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="admin_partials_settings-page.php.html">admin/partials/settings-page.php</a>, <a href="admin_partials_settings-page.php.html#line568">line 568</a>
+        <a href="classes_FileOptimizer.php.html">classes/FileOptimizer.php</a>, <a href="classes_FileOptimizer.php.html#line799">line 799</a>
     </li></ul></dd>
     
 
@@ -113,6 +208,28 @@
 
 
 
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>New value.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+
+    
 
 
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Action: powered_cache_admin_page_before_file_optimization</title>
+    <title>PoweredCache Hooks: Filter: powered_cache_lazy_load_html</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Action: powered_cache_admin_page_before_file_optimization</h1>
+    <h1 class="page-title">Filter: powered_cache_lazy_load_html</h1>
 
     
 
@@ -38,20 +38,71 @@
 
     
 
-    <h4 class="name" id="powered_cache_admin_page_before_file_optimization">do_action( 'powered_cache_admin_page_before_file_optimization' )</h4>
+    <h4 class="name" id="powered_cache_lazy_load_html">apply_filters( 'powered_cache_lazy_load_html', <span class="signature">true )</span><span class="type-signature"> &rarr; {boolean}</span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Fires before file optimization section</p>
+    <ul>
+<li>Filters whether apply or not apply lazyload for html.</li>
+</ul>
 </div>
 
 
 
 
 
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>true</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>to apply lazyload for html</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
 
 
 
@@ -64,7 +115,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>1.0</li></ul></dd>
     
 
     
@@ -90,7 +141,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="admin_partials_settings-page.php.html">admin/partials/settings-page.php</a>, <a href="admin_partials_settings-page.php.html#line568">line 568</a>
+        <a href="classes_LazyLoad.php.html">classes/LazyLoad.php</a>, <a href="classes_LazyLoad.php.html#line265">line 265</a>
     </li></ul></dd>
     
 
@@ -113,6 +164,28 @@
 
 
 
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>New value.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">boolean</span>
+
+
+    </dd>
+</dl>
+
+    
 
 
 
