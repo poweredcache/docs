@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Filter: powered_cache_preload_post_types</title>
+    <title>PoweredCache Hooks: Action: powered_cache_advanced_cache_purge_on_comment_update</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Filter: powered_cache_preload_post_types</h1>
+    <h1 class="page-title">Action: powered_cache_advanced_cache_purge_on_comment_update</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_preload_post_types">apply_filters( 'powered_cache_preload_post_types', <span class="signature">$types )</span><span class="type-signature"> &rarr; {array}</span></h4>
+    <h4 class="name" id="powered_cache_advanced_cache_purge_on_comment_update">do_action( 'powered_cache_advanced_cache_purge_on_comment_update', <span class="signature">$post_id, $post_url, $comment_id )</span><span class="type-signature"></span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters public post types.</p>
+    <p>Fires after purging cache for a post that associated a comment</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>$types</code></td>
+                <td class="name"><code>$post_id</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">array</span>
+<span class="param-type">int</span>
 
 
             
@@ -95,7 +95,53 @@
 
             
 
-            <td class="description last"><p>Public post types.</p></td>
+            <td class="description last"><p>Post ID.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>$post_url</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Post permalink.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>$comment_id</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">int</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Comment ID.</p></td>
         </tr>
 
     
@@ -113,7 +159,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>1.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>3.4.4</li></ul></dd>
     
 
     
@@ -139,7 +185,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_Preloader.php.html">classes/Preloader.php</a>, <a href="classes_Preloader.php.html#line318">line 318</a>
+        <a href="classes_AdvancedCache.php.html">classes/AdvancedCache.php</a>, <a href="classes_AdvancedCache.php.html#line318">line 318</a>
     </li></ul></dd>
     
 
@@ -162,28 +208,6 @@
 
 
 
-<h5>Returns:</h5>
-
-        
-<div class="param-desc">
-    <p>New value.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">array</span>
-
-
-    </dd>
-</dl>
-
-    
 
 
 
