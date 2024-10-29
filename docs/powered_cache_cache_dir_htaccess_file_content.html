@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Filter: powered_cache_cache_purge_interval</title>
+    <title>PoweredCache Hooks: Action: powered_cache_cache_dir_htaccess_file_content</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Filter: powered_cache_cache_purge_interval</h1>
+    <h1 class="page-title">Action: powered_cache_cache_dir_htaccess_file_content</h1>
 
     
 
@@ -38,14 +38,14 @@
 
     
 
-    <h4 class="name" id="powered_cache_cache_purge_interval">apply_filters( 'powered_cache_cache_purge_interval', <span class="signature">TTL )</span><span class="type-signature"> &rarr; {int}</span></h4>
+    <h4 class="name" id="powered_cache_cache_dir_htaccess_file_content">do_action( 'powered_cache_cache_dir_htaccess_file_content', <span class="signature">$file_string )</span><span class="type-signature"></span></h4>
 
     
 
 
 
 <div class="description">
-    <p>Filters page cache purge interval</p>
+    <p>Filters the content of the .htaccess file in the cache directory.</p>
 </div>
 
 
@@ -79,13 +79,13 @@
 
         <tr>
             
-                <td class="name"><code>TTL</code></td>
+                <td class="name"><code>$file_string</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">int</span>
+<span class="param-type">string</span>
 
 
             
@@ -95,7 +95,7 @@
 
             
 
-            <td class="description last"><p>in seconds.</p></td>
+            <td class="description last"><p>Default configuration</p></td>
         </tr>
 
     
@@ -113,7 +113,7 @@
 
     
     <dt class="tag-since">Since:</dt>
-    <dd class="tag-since"><ul class="dummy"><li>2.0</li></ul></dd>
+    <dd class="tag-since"><ul class="dummy"><li>3.5.3</li></ul></dd>
     
 
     
@@ -139,7 +139,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="classes_Cron.php.html">classes/Cron.php</a>, <a href="classes_Cron.php.html#line59">line 59</a>
+        <a href="classes_Config.php.html">classes/Config.php</a>, <a href="classes_Config.php.html#line446">line 446</a>
     </li></ul></dd>
     
 
@@ -162,28 +162,6 @@
 
 
 
-<h5>Returns:</h5>
-
-        
-<div class="param-desc">
-    <p>New value.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">int</span>
-
-
-    </dd>
-</dl>
-
-    
 
 
 
