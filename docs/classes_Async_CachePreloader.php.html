@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>PoweredCache Hooks: Source: classes/Cron.php</title>
+    <title>PoweredCache Hooks: Source: classes/Async/CachePreloader.php</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -17,7 +17,7 @@
 
 <div id="main">
 
-    <h1 class="page-title">Source: classes/Cron.php</h1>
+    <h1 class="page-title">Source: classes/Async/CachePreloader.php</h1>
 
     
 
@@ -28,214 +28,221 @@
         <article>
             <pre class="prettyprint source linenums"><code>&lt;?php
 /**
- * Cron based functionalities
+ * Background process for cache preloading
  *
  * @package PoweredCache
  */
 
-namespace PoweredCache;
+namespace PoweredCache\Async;
 
-use const PoweredCache\Constants\PURGE_CACHE_CRON_NAME;
-use const PoweredCache\Constants\PURGE_FO_CRON_NAME;
-use function PoweredCache\Utils\get_expired_files;
-use function PoweredCache\Utils\is_dir_empty;
-use function PoweredCache\Utils\site_cache_dir;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+use PoweredCache\Preloader;
+use function PoweredCache\Utils\detect_cpu_cores;
+use function PoweredCache\Utils\is_url_cached;
+use \Powered_Cache_WP_Background_Process as Powered_Cache_WP_Background_Process;
 
 /**
- * Class Cron
+ * Class CachePreloader
  */
-class Cron {
+class CachePreloader extends Powered_Cache_WP_Background_Process {
 
 	/**
-	 * Placeholder constructor
+	 * Plugin settings
+	 *
+	 * @var $settings
 	 */
-	public function __construct() {
-	}
-
+	protected $settings;
 
 	/**
-	 * Setup actions and filters
+	 * string
 	 *
-	 * @since 1.0
+	 * @var $action
 	 */
-	private function setup() {
-		add_action( PURGE_CACHE_CRON_NAME, array( $this, 'purge_expired_page_cache' ) );
-		add_action( PURGE_FO_CRON_NAME, array( $this, 'purge_expired_minify_files' ) );
-		add_action( 'init', array( $this, 'schedule_page_cache_events' ) );
-		add_action( 'init', array( $this, 'schedule_fo_cache_events' ) );
-		add_filter( 'cron_schedules', array( $this, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected
-	}
+	protected $action = 'powered_cache_preload';
 
 	/**
-	 * Add custom cron schedule
+	 * Supported preloading options
+	 * Options are the key of plugin settings
 	 *
-	 * @param array $schedules registered cron schedules
-	 *
-	 * @return array $schedules
-	 * @since  1.0
+	 * @return array
 	 */
-	public function cron_schedules( $schedules ) {
-		$settings = \PoweredCache\Utils\get_settings();
-
-		$interval = $settings['cache_timeout'] * 60; // in seconds
-
-		$schedules['powered_cache'] = [
-			/**
-			 * Filters page cache purge interval
-			 *
-			 * @hook   powered_cache_cache_purge_interval
-			 *
-			 * @param  {int} TTL in seconds.
-			 *
-			 * @return {int} New value.
-			 * @since  2.0
-			 */
-			'interval' => apply_filters( 'powered_cache_cache_purge_interval', $interval ),
-			'display'  => esc_html__( 'Powered Cache Purge Interval', 'powered-cache' ),
+	public function get_supported_options() {
+		return [
+			'preload_homepage',
+			'preload_public_posts',
+			'preload_public_tax',
 		];
-
-		return $schedules;
 	}
 
 	/**
-	 * Unschedule events
+	 * Task
 	 *
-	 * @since  1.0
-	 */
-	public function unschedule_events() {
-		$timestamp = wp_next_scheduled( PURGE_CACHE_CRON_NAME );
-		wp_unschedule_event( $timestamp, PURGE_CACHE_CRON_NAME );
-
-		$timestamp = wp_next_scheduled( PURGE_FO_CRON_NAME );
-		wp_unschedule_event( $timestamp, PURGE_FO_CRON_NAME );
-	}
-
-	/**
-	 * Setup cron jobs
+	 * Perform Preload Tasks
 	 *
-	 * @since 1.0
+	 * @param mixed $item Queue item to iterate over
+	 *
+	 * @return mixed
 	 */
-	public function schedule_page_cache_events() {
-		$settings = \PoweredCache\Utils\get_settings();
-
-		$timestamp = wp_next_scheduled( PURGE_CACHE_CRON_NAME );
-
-		// we don't need when page cache off
-		if ( true !== $settings['enable_page_cache'] ) {
-			wp_unschedule_event( $timestamp, PURGE_CACHE_CRON_NAME );
-
-			return;
+	protected function task( $item ) {
+		// Stop early if system load is too high
+		if ( ! $this->should_continue() ) {
+			\PoweredCache\Utils\log( 'Preload task aborted early due to system load' );
+			return $item;
 		}
 
-		// Expire cache never
-		if ( intval( $settings['cache_timeout'] ) === 0 ) {
-			wp_unschedule_event( $timestamp, PURGE_CACHE_CRON_NAME );
+		$this->settings = \PoweredCache\Utils\get_settings();
+		$delay          = absint( $this->settings['preload_request_interval'] ) * 1000000; // convert to microseconds
 
-			return;
-		}
+		\PoweredCache\Utils\log( sprintf( 'Preloading..: %s', $item ) );
 
-		if ( ! $timestamp ) {
-			/**
-			 * Only use `powered_cache` interval when TTL under the an hour
-			 */
-			if ( intval( $settings['cache_timeout'] ) &lt; 60 ) {
-				return wp_schedule_event( time(), 'powered_cache', PURGE_CACHE_CRON_NAME );
+		if ( filter_var( $item, FILTER_VALIDATE_URL ) ) {
+
+			if ( ! is_url_cached( $item, false, $this->settings['gzip_compression'] ) ) {
+				Preloader::preload_request( $item );
+				Preloader::wait( $delay );
 			}
 
-			return wp_schedule_event( time(), 'hourly', PURGE_CACHE_CRON_NAME );
-		}
-
-	}
-
-
-	/**
-	 * Schedule a cron event keep only most recent min. files in cache
-	 *
-	 * @return bool|void|\WP_Error
-	 */
-	public function schedule_fo_cache_events() {
-		$timestamp = wp_next_scheduled( PURGE_FO_CRON_NAME );
-
-		if ( ! file_exists( POWERED_CACHE_FO_CACHE_DIR ) || is_dir_empty( POWERED_CACHE_FO_CACHE_DIR ) ) {
-			return;
-		}
-
-		if ( ! $timestamp ) {
-			return wp_schedule_event( time(), 'hourly', PURGE_FO_CRON_NAME );
-		}
-	}
-
-	/**
-	 * Initiate a cache purge
-	 *
-	 * @since 1.0
-	 */
-	public function purge_expired_page_cache() {
-		$settings = \PoweredCache\Utils\get_settings();
-
-		// Do nothing, caching is turned off
-		if ( true !== $settings['enable_page_cache'] ) {
-			return;
-		}
-
-		$lifespan = $settings['cache_timeout'] * 60; // TTL in seconds
-
-		$expired_files = get_expired_files( site_cache_dir(), $lifespan );
-
-		foreach ( $expired_files as $file_path ) {
-			\PoweredCache\Utils\log( sprintf( 'Cleanup via cron: %s', $file_path ) );
-			@unlink( $file_path );  // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		}
-
-		// cleanup dirs..
-		foreach ( $expired_files as $file_path ) {
-			$dir = dirname( $file_path );
-			if ( file_exists( $dir ) &amp;&amp; is_dir_empty( $dir ) ) {
-				@rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// make the preload request by using mobile agent
+			if ( $this->settings['cache_mobile'] &amp;&amp; $this->settings['cache_mobile_separate_file'] ) {
+				if ( ! is_url_cached( $item, true, $this->settings['gzip_compression'] ) ) {
+					Preloader::preload_request( $item, [ 'user-agent' => Preloader::mobile_user_agent() ] );
+					Preloader::wait( $delay );
+				}
 			}
 		}
 
-		/**
-		 * Fire when expired files deleted
-		 *
-		 * @since 2.0 added $expired_files $arg
-		 * @since 1.0
-		 */
-		do_action( 'powered_cache_expired_files_deleted', $expired_files );
+		\PoweredCache\Utils\log( sprintf( 'Preloaded...: %s', $item ) );
+
+		return false;
+	}
+
+
+	/**
+	 * Complete
+	 *
+	 * Override if applicable, but ensure that the below actions are
+	 * performed, or, call parent::complete().
+	 */
+	protected function complete() { // phpcs:ignore Generic.CodeAnalysis.UselessOverridingMethod.Found
+		parent::complete();
 	}
 
 	/**
-	 * Remove minify files
+	 * Sometimes canceling a process is glitchy
+	 * Try to cancel all items in the queue up to $max_attempt
 	 */
-	public function purge_expired_minify_files() {
-		/**
-		 * Filters default TTL for minified assets.
-		 *
-		 * @hook   powered_cache_fo_cache_ttl
-		 *
-		 * @param  {int} TTL in seconds.
-		 *
-		 * @return {int} New value.
-		 * @since  2.0
-		 */
-		$lifespan      = apply_filters( 'powered_cache_fo_cache_ttl', 60 * 60 ); // in seconds
-		$expired_files = get_expired_files( POWERED_CACHE_FO_CACHE_DIR, $lifespan );
-		foreach ( $expired_files as $file_path ) {
-			\PoweredCache\Utils\log( sprintf( 'Cleanup via cron: %s', $file_path ) );
-			@unlink( $file_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	public function cancel_process() {
+		$max_attempt = 5;
+		$cancelled   = 0;
+		while ( ! parent::is_queue_empty() ) {
+			if ( $cancelled >= $max_attempt ) {
+				break;
+			}
+			parent::cancel();
+			$cancelled ++;
 		}
 	}
 
+	/**
+	 * Whether the process running or not
+	 *
+	 * @return bool
+	 */
+	public function is_process_running() { // phpcs:ignore Generic.CodeAnalysis.UselessOverridingMethod.Found
+		return parent::is_processing();
+	}
 
 	/**
-	 * Return an instance of the current class, create one if it doesn't exist
+	 * Determine if the background process should continue.
+	 * Stops the process if server load is too high or spikes suddenly.
 	 *
-	 * @return object
-	 * @since  1.0
+	 * @return bool
+	 */
+	public function should_continue() {
+		$should_continue = parent::should_continue();
+		$halted_by_load  = false;
+
+		$load = function_exists( 'sys_getloadavg' )
+			? sys_getloadavg()
+			: [ 0.0, 0.0, 0.0 ];
+
+		$load_1min  = isset( $load[0] ) ? (float) $load[0] : 0.0;
+		$load_5min  = isset( $load[1] ) ? (float) $load[1] : 0.0;
+		$load_15min = isset( $load[2] ) ? (float) $load[2] : 0.0;
+
+		// Weighted average: gives slightly more weight to short-term load.
+		$weighted_load = ( $load_1min * 0.5 + $load_5min * 0.3 + $load_15min * 0.2 );
+
+		// Consider a spike if 1min load is significantly higher than longer-term averages.
+		$load_spike_detected = ( $load_1min > $load_5min * 2 || $load_5min > $load_15min * 2 );
+
+		// Fallback max load threshold
+		$default_max_load = 16.0;
+
+		/**
+		 * Filter the max allowed server load before preloading pauses.
+		 *
+		 * @hook   powered_cache_preloader_max_server_load
+		 *
+		 * @param  {float} $default_max_load Default load threshold.
+		 * @param  {array} $load             [1min, 5min, 15min] load averages.
+		 *
+		 * @return {float} Maximum allowed server load before preloading pauses.
+		 * @since  3.6
+		 */
+		$max_allowed_load = apply_filters(
+			'powered_cache_preloader_max_server_load',
+			$default_max_load,
+			$load
+		);
+
+		// Allow setting a custom maximum server load threshold.
+		if ( defined( 'POWERED_CACHE_PRELOADER_MAX_SERVER_LOAD' ) &amp;&amp; is_numeric( POWERED_CACHE_PRELOADER_MAX_SERVER_LOAD ) ) {
+			$max_allowed_load = (float) POWERED_CACHE_PRELOADER_MAX_SERVER_LOAD;
+		}
+
+		if ( $should_continue &amp;&amp; ( $weighted_load > $max_allowed_load || $load_spike_detected ) ) {
+			\PoweredCache\Utils\log(
+				sprintf(
+					'Preload paused: server load too high or spike detected (1min: %.2f, 5min: %.2f, 15min: %.2f, weighted: %.2f, threshold: %.2f)',
+					$load_1min,
+					$load_5min,
+					$load_15min,
+					$weighted_load,
+					$max_allowed_load
+				)
+			);
+			$should_continue = false;
+			$halted_by_load  = true;
+		}
+
+		/**
+		 * Allow complete control over continuation logic.
+		 *
+		 * @hook  powered_cache_preloader_should_continue
+		 *
+		 * @param bool  $should_continue  Whether to continue processing.
+		 * @param bool  $halted_by_load   True if we halted due to load.
+		 * @param array $load             [1min, 5min, 15min] load averages.
+		 * @param float $max_allowed_load Final load limit used for decision.
+		 *
+		 * @return bool Whether to continue processing.
+		 * @since 3.6
+		 */
+		return (bool) apply_filters(
+			'powered_cache_preloader_should_continue',
+			$should_continue,
+			$halted_by_load,
+			$load,
+			$max_allowed_load
+		);
+	}
+
+
+	/**
+	 * Return an instance of the current class
+	 *
+	 * @return CachePreloader
+	 * @since 2.0
 	 */
 	public static function factory() {
 
@@ -243,11 +250,11 @@ class Cron {
 
 		if ( ! $instance ) {
 			$instance = new self();
-			$instance->setup();
 		}
 
 		return $instance;
 	}
+
 }
 </code></pre>
         </article>
