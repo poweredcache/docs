@@ -6,6 +6,7 @@ vendor
 *.log
 
 # Project Files
+.hookdoc-build/
 
 
 # Editors

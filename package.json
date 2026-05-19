@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "build-docs": "rm -rf docs && jsdoc -c hookdoc-conf.json ../powered-cache/powered-cache.php ../powered-cache/includes/"
+    "build-docs": "node scripts/build-docs.js all",
+    "build-docs:free": "node scripts/build-docs.js free",
+    "build-docs:premium": "node scripts/build-docs.js premium",
+    "build-docs:all": "node scripts/build-docs.js all",
+    "validate-hooks": "node scripts/validate-hooks.js"
   },
   "author": "PoweredCache",
   "devDependencies": {

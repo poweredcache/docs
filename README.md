@@ -1,6 +1,6 @@
 ## PoweredCache Developer Docs
 
-Powered Cache hook reference for developers. Please use our [documentation website](https://docs.poweredcache.com/) for user documentation.
+Powered Cache and Powered Cache Premium hook reference for developers. Please use our [documentation website](https://docs.poweredcache.com/) for user documentation.
 
 For more information about the plugin, please visit the [website](https://poweredcache.com/).
 
