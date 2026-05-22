@@ -7,6 +7,8 @@
     "build-docs:free": "node scripts/build-docs.js free",
     "build-docs:premium": "node scripts/build-docs.js premium",
     "build-docs:all": "node scripts/build-docs.js all",
+    "quality": "npm run validate-hooks",
+    "quality:docs": "npm run validate-hooks && npm run build-docs",
     "validate-hooks": "node scripts/validate-hooks.js"
   },
   "author": "PoweredCache",
