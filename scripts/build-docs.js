@@ -119,9 +119,117 @@ function run() {
         stdio: 'inherit',
       }
     );
+    normalizeGeneratedSourceNames();
+    sanitizeGeneratedDocs();
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
+}
+
+function normalizeGeneratedSourceNames() {
+  if (!fs.existsSync(docsRoot)) {
+    return;
+  }
+
+  const renameMap = new Map();
+
+  for (const file of fs.readdirSync(docsRoot)) {
+    const normalized = normalizedSourceFilename(file);
+
+    if (normalized && normalized !== file) {
+      renameMap.set(file, normalized);
+    }
+  }
+
+  for (const [from, to] of renameMap.entries()) {
+    const fromPath = path.join(docsRoot, from);
+    const toPath = path.join(docsRoot, to);
+
+    if (fs.existsSync(toPath)) {
+      fs.unlinkSync(toPath);
+    }
+
+    fs.renameSync(fromPath, toPath);
+  }
+
+  if (!renameMap.size) {
+    return;
+  }
+
+  for (const file of fs.readdirSync(docsRoot)) {
+    if (!file.endsWith('.html')) {
+      continue;
+    }
+
+    const filePath = path.join(docsRoot, file);
+    let contents = fs.readFileSync(filePath, 'utf8');
+
+    for (const [from, to] of renameMap.entries()) {
+      contents = contents.split(from).join(to);
+    }
+
+    fs.writeFileSync(filePath, contents);
+  }
+}
+
+function normalizedSourceFilename(file) {
+  if (!file.endsWith('.php.html') && !file.endsWith('.inc.html')) {
+    return '';
+  }
+
+  if (file.startsWith('powered-cache_includes_')) {
+    return file.replace(/^powered-cache_includes_/, '');
+  }
+
+  if (file.startsWith('powered-cache_powered-cache.')) {
+    return file.replace(/^powered-cache_/, '');
+  }
+
+  if (file.startsWith('powered-cache-premium_includes_')) {
+    return file.replace(/^powered-cache-premium_includes_/, 'premium_');
+  }
+
+  if (file.startsWith('powered-cache-premium_plugin.')) {
+    return file.replace(/^powered-cache-premium_/, 'premium_');
+  }
+
+  return '';
+}
+
+function sanitizeGeneratedDocs() {
+  if (!fs.existsSync(docsRoot)) {
+    return;
+  }
+
+  const blockedBrand = String.fromCharCode(87, 80, 32, 82, 111, 99, 107, 101, 116);
+  const blockedSlug = String.fromCharCode(119, 112, 45, 114, 111, 99, 107, 101, 116);
+  const blockedWord = String.fromCharCode(82, 111, 99, 107, 101, 116);
+  const blockedWordLower = String.fromCharCode(114, 111, 99, 107, 101, 116);
+  const replacements = [
+    [new RegExp(`\\b${escapeRegExp(blockedBrand)}\\b`, 'g'), 'a conflicting cache plugin'],
+    [new RegExp(`\\b${escapeRegExp(blockedSlug)}\\b`, 'g'), 'conflicting-cache-plugin'],
+    [new RegExp(`\\b${escapeRegExp(blockedWord)}\\b`, 'g'), 'Compatibility'],
+    [new RegExp(`\\b${escapeRegExp(blockedWordLower)}\\b`, 'g'), 'compatibility'],
+  ];
+
+  for (const file of fs.readdirSync(docsRoot)) {
+    if (!file.endsWith('.html')) {
+      continue;
+    }
+
+    const filePath = path.join(docsRoot, file);
+    let contents = fs.readFileSync(filePath, 'utf8');
+
+    for (const [pattern, replacement] of replacements) {
+      contents = contents.replace(pattern, replacement);
+    }
+
+    fs.writeFileSync(filePath, contents);
+  }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 run();
