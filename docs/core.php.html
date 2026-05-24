@@ -38,7 +38,9 @@ namespace PoweredCache\Core;
 use PoweredCache\Async\CachePreloader;
 use PoweredCache\Async\CachePurger;
 use PoweredCache\Async\DatabaseOptimizer;
+use PoweredCache\CompatibilityRules;
 use PoweredCache\Config;
+use PoweredCache\SettingsRestController;
 use const PoweredCache\Constants\DB_CLEANUP_COUNT_CACHE_KEY;
 use const PoweredCache\Constants\MENU_SLUG;
 use PoweredCache\Optimizer\JS;
@@ -56,6 +58,8 @@ function setup() {
 	add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\admin_styles' );
 	add_action( 'enqueue_block_editor_assets', __NAMESPACE__ . '\\block_editor_assets' );
 	add_action( 'plugins_loaded', __NAMESPACE__ . '\\register_async_process' );
+	CompatibilityRules::factory()->setup();
+	SettingsRestController::factory();
 
 	// Hook to allow async or defer on asset loading.
 	add_filter( 'script_loader_tag', __NAMESPACE__ . '\\script_loader_tag', 10, 2 );
@@ -180,6 +184,34 @@ function style_url( $stylesheet, $context ) {
 }
 
 /**
+ * Return generated asset metadata for a dist file.
+ *
+ * @param string $asset Asset file name without extension.
+ * @param string $type  Asset type, either js or css.
+ *
+ * @return array
+ */
+function asset_metadata( $asset, $type ) {
+	$path = POWERED_CACHE_PATH . "dist/{$type}/{$asset}.asset.php";
+
+	if ( file_exists( $path ) ) {
+		$metadata = require $path;
+
+		if ( is_array( $metadata ) ) {
+			return array(
+				'dependencies' => isset( $metadata['dependencies'] ) &amp;&amp; is_array( $metadata['dependencies'] ) ? $metadata['dependencies'] : array(),
+				'version'      => ! empty( $metadata['version'] ) ? $metadata['version'] : POWERED_CACHE_VERSION,
+			);
+		}
+	}
+
+	return array(
+		'dependencies' => array(),
+		'version'      => POWERED_CACHE_VERSION,
+	);
+}
+
+/**
  * Enqueue scripts for admin.
  *
  * @param string $hook Current hook.
@@ -191,13 +223,13 @@ function admin_scripts( $hook ) {
 	$classic_editor_hooks = [ 'post-new.php', 'post.php' ];
 
 	if ( in_array( $hook, $classic_editor_hooks, true ) ) {
+		$classic_editor_asset = asset_metadata( 'classic-editor', 'js' );
+
 		wp_enqueue_script(
 			'powered-cache-classic-editor',
 			script_url( 'classic-editor', 'classic-editor' ),
-			[
-				'jquery',
-			],
-			POWERED_CACHE_VERSION,
+			array_values( array_unique( array_merge( [ 'jquery' ], $classic_editor_asset['dependencies'] ) ) ),
+			$classic_editor_asset['version'],
 			true
 		);
 	}
@@ -206,16 +238,60 @@ function admin_scripts( $hook ) {
 		return;
 	}
 
+	$admin_asset = asset_metadata( 'admin', 'js' );
+
 	wp_enqueue_script(
 		'powered-cache-admin',
 		script_url( 'admin', 'admin' ),
-		[
-			'jquery',
-			'lodash',
-			'wp-i18n',
-		],
-		POWERED_CACHE_VERSION,
+		array_values(
+			array_unique(
+				array_merge(
+					[
+						'jquery',
+						'lodash',
+						'wp-api-fetch',
+						'wp-components',
+						'wp-element',
+						'wp-i18n',
+					],
+					$admin_asset['dependencies']
+				)
+			)
+		),
+		$admin_asset['version'],
 		true
+	);
+
+	$settings_app_config = [
+		'namespace'       => SettingsRestController::REST_NAMESPACE,
+		'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+		'restRoot'        => esc_url_raw( rest_url() ),
+		'restNonce'       => wp_create_nonce( 'wp_rest' ),
+		'settingsFormUrl' => self_admin_url( 'admin.php?page=' . MENU_SLUG . '&amp;section=misc' ),
+		'settingsNonce'   => wp_create_nonce( 'powered_cache_update_settings' ),
+		'purgeAllUrl'     => wp_nonce_url( self_admin_url( 'admin-post.php?action=powered_cache_purge_all_cache' ), 'powered_cache_purge_all_cache' ),
+		'isPremium'       => \PoweredCache\Utils\is_premium(),
+		'upgradeUrl'      => 'https://poweredcache.com/?utm_source=poweredcache&amp;utm_medium=plugin&amp;utm_campaign=settings_upgrade',
+		'docsUrl'         => \PoweredCache\Utils\get_doc_url( '/' ),
+	];
+
+	/**
+	 * Filter settings app bootstrap configuration.
+	 *
+	 * @hook powered_cache_settings_app_config
+	 *
+	 * @param {array} $settings_app_config Settings app bootstrap configuration.
+	 *
+	 * @return {array} New value.
+	 *
+	 * @since 4.0.0
+	 */
+	$settings_app_config = apply_filters( 'powered_cache_settings_app_config', $settings_app_config );
+
+	wp_add_inline_script(
+		'powered-cache-admin',
+		'window.poweredCacheSettingsApp = ' . wp_json_encode( $settings_app_config ) . ';',
+		'before'
 	);
 
 	wp_set_script_translations(
@@ -243,22 +319,31 @@ function block_editor_assets() {
 	 * The post meta-box works with compat mode vice-versa...
 	 */
 	if ( version_compare( get_bloginfo( 'version' ), '5.3', '>=' ) ) {
+		$editor_asset = asset_metadata( 'editor', 'js' );
+
 		wp_register_script(
 			'powered-cache-editor',
 			script_url( 'editor', 'admin' ),
-			[
-				'jquery',
-				'lodash',
-				'wp-i18n',
-				'wp-edit-post',
-				'wp-components',
-				'wp-compose',
-				'wp-data',
-				'wp-edit-post',
-				'wp-element',
-				'wp-plugins',
-			],
-			POWERED_CACHE_VERSION,
+			array_values(
+				array_unique(
+					array_merge(
+						[
+							'jquery',
+							'lodash',
+							'wp-i18n',
+							'wp-edit-post',
+							'wp-components',
+							'wp-compose',
+							'wp-data',
+							'wp-edit-post',
+							'wp-element',
+							'wp-plugins',
+						],
+						$editor_asset['dependencies']
+					)
+				)
+			),
+			$editor_asset['version'],
 			true
 		);
 
@@ -284,11 +369,13 @@ function admin_styles() {
 		return;
 	}
 
+	$admin_style_asset = asset_metadata( 'admin-style', 'css' );
+
 	wp_enqueue_style(
 		'powered-cache-admin',
 		style_url( 'admin-style', 'admin' ),
-		[],
-		POWERED_CACHE_VERSION
+		$admin_style_asset['dependencies'],
+		$admin_style_asset['version']
 	);
 
 }
@@ -335,6 +422,7 @@ function script_loader_tag( $tag, $handle ) {
 function register_async_process() {
 	DatabaseOptimizer::factory();
 	CachePurger::factory();
+	CachePreloader::factory();
 }
 </code></pre>
         </article>
@@ -346,7 +434,7 @@ function register_async_process() {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_admin_page_after_settings_nav.html">powered_cache_admin_page_after_settings_nav</a></li><li><a href="powered_cache_admin_page_before_file_optimization.html">powered_cache_admin_page_before_file_optimization</a></li><li><a href="powered_cache_advanced_cache_purge_on_comment_update.html">powered_cache_advanced_cache_purge_on_comment_update</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cache_dir_htaccess_file_content.html">powered_cache_cache_dir_htaccess_file_content</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="populate_preload_queue_urls.html">populate_preload_queue_urls</a></li><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cache_query_strings.html">powered_cache_cache_query_strings</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_disable.html">powered_cache_cdn_disable</a></li><li><a href="powered_cache_cdn_extensions.html">powered_cache_cdn_extensions</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_rewrite_relative_urls.html">powered_cache_cdn_rewrite_relative_urls</a></li><li><a href="powered_cache_cdn_site_hostnames.html">powered_cache_cdn_site_hostnames</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_defer_exclusions.html">powered_cache_defer_exclusions</a></li><li><a href="powered_cache_delay_exclusions.html">powered_cache_delay_exclusions</a></li><li><a href="powered_cache_delayed_js_script_content.html">powered_cache_delayed_js_script_content</a></li><li><a href="powered_cache_delayed_js_script_loader.html">powered_cache_delayed_js_script_loader</a></li><li><a href="powered_cache_delayed_js_skip.html">powered_cache_delayed_js_skip</a></li><li><a href="powered_cache_delayed_js_timeout.html">powered_cache_delayed_js_timeout</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_js_defer.html">powered_cache_disable_js_defer</a></li><li><a href="powered_cache_disable_js_defer_inline.html">powered_cache_disable_js_defer_inline</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable.html">powered_cache_fo_disable</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_excluded_css_files.html">powered_cache_fo_excluded_css_files</a></li><li><a href="powered_cache_fo_excluded_js_files.html">powered_cache_fo_excluded_js_files</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_google_fonts_domain.html">powered_cache_fo_google_fonts_domain</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_relative_path.html">powered_cache_fo_relative_path</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_htaccess_add_cors.html">powered_cache_htaccess_add_cors</a></li><li><a href="powered_cache_htaccess_cache_control_rules.html">powered_cache_htaccess_cache_control_rules</a></li><li><a href="powered_cache_htaccess_enable_gzip_compression.html">powered_cache_htaccess_enable_gzip_compression</a></li><li><a href="powered_cache_ignored_query_strings.html">powered_cache_ignored_query_strings</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_exclusions.html">powered_cache_lazy_load_exclusions</a></li><li><a href="powered_cache_lazy_load_html.html">powered_cache_lazy_load_html</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_skip_first_nth_img.html">powered_cache_lazy_load_skip_first_nth_img</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_lazy_load_youtube.html">powered_cache_lazy_load_youtube</a></li><li><a href="powered_cache_lazy_load_youtube_css.html">powered_cache_lazy_load_youtube_css</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_preconnect_resource.html">powered_cache_preconnect_resource</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_add_url_to_queue.html">powered_cache_preload_add_url_to_queue</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_preloader_max_server_load.html">powered_cache_preloader_max_server_load</a></li><li><a href="powered_cache_preloader_should_continue.html">powered_cache_preloader_should_continue</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_referrers.html">powered_cache_rejected_referrers</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_advanced_cache_purge_on_comment_update.html">powered_cache_advanced_cache_purge_on_comment_update</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cache_dir_htaccess_file_content.html">powered_cache_cache_dir_htaccess_file_content</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="populate_preload_queue_urls.html">populate_preload_queue_urls</a></li><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cache_query_strings.html">powered_cache_cache_query_strings</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_disable.html">powered_cache_cdn_disable</a></li><li><a href="powered_cache_cdn_extensions.html">powered_cache_cdn_extensions</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_rewrite_relative_urls.html">powered_cache_cdn_rewrite_relative_urls</a></li><li><a href="powered_cache_cdn_site_hostnames.html">powered_cache_cdn_site_hostnames</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_compatibility_rules_active_plugins.html">powered_cache_compatibility_rules_active_plugins</a></li><li><a href="powered_cache_compatibility_rules_file.html">powered_cache_compatibility_rules_file</a></li><li><a href="powered_cache_compatibility_rules_registry.html">powered_cache_compatibility_rules_registry</a></li><li><a href="powered_cache_compatibility_rules_remote_hosts.html">powered_cache_compatibility_rules_remote_hosts</a></li><li><a href="powered_cache_compatibility_rules_remote_url.html">powered_cache_compatibility_rules_remote_url</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_defer_exclusions.html">powered_cache_defer_exclusions</a></li><li><a href="powered_cache_delay_exclusions.html">powered_cache_delay_exclusions</a></li><li><a href="powered_cache_delayed_js_script_content.html">powered_cache_delayed_js_script_content</a></li><li><a href="powered_cache_delayed_js_script_loader.html">powered_cache_delayed_js_script_loader</a></li><li><a href="powered_cache_delayed_js_skip.html">powered_cache_delayed_js_skip</a></li><li><a href="powered_cache_delayed_js_timeout.html">powered_cache_delayed_js_timeout</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_js_defer.html">powered_cache_disable_js_defer</a></li><li><a href="powered_cache_disable_js_defer_inline.html">powered_cache_disable_js_defer_inline</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable.html">powered_cache_fo_disable</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_excluded_css_files.html">powered_cache_fo_excluded_css_files</a></li><li><a href="powered_cache_fo_excluded_js_files.html">powered_cache_fo_excluded_js_files</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_google_fonts_domain.html">powered_cache_fo_google_fonts_domain</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_relative_path.html">powered_cache_fo_relative_path</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_htaccess_add_cors.html">powered_cache_htaccess_add_cors</a></li><li><a href="powered_cache_htaccess_cache_control_rules.html">powered_cache_htaccess_cache_control_rules</a></li><li><a href="powered_cache_htaccess_enable_gzip_compression.html">powered_cache_htaccess_enable_gzip_compression</a></li><li><a href="powered_cache_ignored_query_strings.html">powered_cache_ignored_query_strings</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_exclusions.html">powered_cache_lazy_load_exclusions</a></li><li><a href="powered_cache_lazy_load_html.html">powered_cache_lazy_load_html</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_skip_first_nth_img.html">powered_cache_lazy_load_skip_first_nth_img</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_lazy_load_youtube.html">powered_cache_lazy_load_youtube</a></li><li><a href="powered_cache_lazy_load_youtube_css.html">powered_cache_lazy_load_youtube_css</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_preconnect_resource.html">powered_cache_preconnect_resource</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_add_url_to_queue.html">powered_cache_preload_add_url_to_queue</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_fonts.html">powered_cache_preload_fonts</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_preloader_max_server_load.html">powered_cache_preloader_max_server_load</a></li><li><a href="powered_cache_preloader_should_continue.html">powered_cache_preloader_should_continue</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_referrers.html">powered_cache_rejected_referrers</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_settings_app_config.html">powered_cache_settings_app_config</a></li><li><a href="powered_cache_settings_sections.html">powered_cache_settings_sections</a></li><li><a href="powered_cache_settings_validation_context.html">powered_cache_settings_validation_context</a></li><li><a href="powered_cache_settings_validation_issues.html">powered_cache_settings_validation_issues</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
 </nav>
 
 <br class="clear">
