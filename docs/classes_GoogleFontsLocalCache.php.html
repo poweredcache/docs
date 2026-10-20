@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>PoweredCache Hooks: Source: classes/GoogleFontsLocalCache.php</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: classes/GoogleFontsLocalCache.php</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>&lt;?php
+/**
+ * Local Google Fonts cache.
+ *
+ * @package PoweredCache
+ */
+
+namespace PoweredCache;
+
+use function PoweredCache\Utils\get_cache_dir;
+
+/**
+ * Caches Google Fonts stylesheets and font files locally.
+ *
+ * @since 4.0.0
+ */
+class GoogleFontsLocalCache {
+
+	const CSS_MAX_BYTES  = 200000;
+	const FONT_MAX_BYTES = 3000000;
+	const FAILURE_TTL    = 300;
+
+	/**
+	 * Cache a Google Fonts stylesheet and return the local URL.
+	 *
+	 * @param string $stylesheet_url Remote stylesheet URL.
+	 *
+	 * @return string
+	 */
+	public function get_stylesheet_url( $stylesheet_url ) {
+		$stylesheet_url = $this->normalize_url( $stylesheet_url );
+
+		if ( '' === $stylesheet_url || ! $this->is_allowed_stylesheet_url( $stylesheet_url ) ) {
+			return $stylesheet_url;
+		}
+
+		$cache_dir = $this->cache_dir();
+		$cache_url = $this->cache_url();
+
+		if ( '' === $cache_dir || '' === $cache_url || ! $this->ensure_dir( $cache_dir ) ) {
+			return $stylesheet_url;
+		}
+
+		$file = $cache_dir . md5( $stylesheet_url ) . '.css';
+		$url  = $cache_url . basename( $file );
+
+		if ( $this->is_fresh( $file, $this->ttl() ) ) {
+			return $url;
+		}
+
+		$css = $this->remote_get_body( $stylesheet_url, self::CSS_MAX_BYTES );
+
+		if ( '' === $css ) {
+			return file_exists( $file ) ? $url : $stylesheet_url;
+		}
+
+		$css = $this->rewrite_font_urls( $css, $stylesheet_url );
+
+		if ( ! $this->write_file( $file, $css ) ) {
+			return $stylesheet_url;
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Replace Google Fonts stylesheet references in rendered HTML.
+	 *
+	 * @param string $html Rendered HTML.
+	 *
+	 * @return string
+	 */
+	public function replace_stylesheet_urls( $html ) {
+		if ( '' === $html || false === stripos( $html, 'fonts.' ) ) {
+			return $html;
+		}
+
+		return preg_replace_callback(
+			'/\shref=(["\'])([^"\']*(?:fonts\.googleapis\.com|fonts\.bunny\.net)\/css[^"\']*)\1/i',
+			function ( $matches ) {
+				return ' href=' . $matches[1] . $this->get_stylesheet_url( $matches[2] ) . $matches[1];
+			},
+			$html
+		);
+	}
+
+	/**
+	 * Return the cache directory.
+	 *
+	 * @return string
+	 */
+	public function cache_dir() {
+		return trailingslashit( get_cache_dir() ) . 'powered-cache/google-fonts/';
+	}
+
+	/**
+	 * Return the web URL for the cache directory.
+	 *
+	 * @return string
+	 */
+	public function cache_url() {
+		if ( ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'content_url' ) ) {
+			return '';
+		}
+
+		$cache_dir   = $this->normalize_path( $this->cache_dir() );
+		$content_dir = trailingslashit( $this->normalize_path( WP_CONTENT_DIR ) );
+
+		if ( 0 !== strpos( $cache_dir, $content_dir ) ) {
+			return '';
+		}
+
+		$relative_path = ltrim( substr( $cache_dir, strlen( $content_dir ) ), '/' );
+
+		return trailingslashit( content_url( $relative_path ) );
+	}
+
+	/**
+	 * Rewrite remote font URLs inside a stylesheet to local cached URLs.
+	 *
+	 * @param string $css           Stylesheet content.
+	 * @param string $stylesheet_url Stylesheet URL.
+	 *
+	 * @return string
+	 */
+	public function rewrite_font_urls( $css, $stylesheet_url ) {
+		return preg_replace_callback(
+			'/url\((["\']?)([^)\'"]+)\1\)/i',
+			function ( $matches ) use ( $stylesheet_url ) {
+				$font_url = $this->absolute_url( trim( $matches[2] ), $stylesheet_url );
+
+				if ( '' === $font_url || ! $this->is_allowed_font_url( $font_url ) ) {
+					return $matches[0];
+				}
+
+				$local_url = $this->cache_font( $font_url );
+
+				if ( '' === $local_url ) {
+					return $matches[0];
+				}
+
+				return 'url(' . $matches[1] . $local_url . $matches[1] . ')';
+			},
+			$css
+		);
+	}
+
+	/**
+	 * Cache a remote font file.
+	 *
+	 * @param string $font_url Remote font URL.
+	 *
+	 * @return string
+	 */
+	private function cache_font( $font_url ) {
+		$cache_dir = $this->cache_dir();
+		$cache_url = $this->cache_url();
+
+		if ( '' === $cache_dir || '' === $cache_url || ! $this->ensure_dir( $cache_dir ) ) {
+			return '';
+		}
+
+		$extension = $this->font_extension( $font_url );
+		$file      = $cache_dir . md5( $font_url ) . '.' . $extension;
+		$url       = $cache_url . basename( $file );
+
+		if ( $this->is_fresh( $file, $this->ttl() ) ) {
+			return $url;
+		}
+
+		$font = $this->remote_get_body( $font_url, self::FONT_MAX_BYTES );
+
+		if ( '' === $font || ! $this->write_file( $file, $font ) ) {
+			return file_exists( $file ) ? $url : '';
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Fetch a remote body from an allowed URL.
+	 *
+	 * @param string $url       Remote URL.
+	 * @param int    $max_bytes Maximum response body size.
+	 *
+	 * @return string
+	 */
+	private function remote_get_body( $url, $max_bytes ) {
+		if ( ! function_exists( 'wp_remote_get' ) ) {
+			return '';
+		}
+
+		$failure_key = 'powered_cache_font_fetch_' . md5( $url );
+		if ( function_exists( 'get_transient' ) &amp;&amp; get_transient( $failure_key ) ) {
+			return '';
+		}
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout'     => 5,
+				'redirection' => 2,
+				'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+			)
+		);
+
+		if ( function_exists( 'is_wp_error' ) &amp;&amp; is_wp_error( $response ) ) {
+			$this->cache_fetch_failure( $failure_key );
+
+			return '';
+		}
+
+		$code = function_exists( 'wp_remote_retrieve_response_code' ) ? (int) wp_remote_retrieve_response_code( $response ) : 0;
+
+		if ( 200 > $code || 300 &lt;= $code ) {
+			$this->cache_fetch_failure( $failure_key );
+
+			return '';
+		}
+
+		$body = function_exists( 'wp_remote_retrieve_body' ) ? wp_remote_retrieve_body( $response ) : '';
+
+		if ( ! is_string( $body ) || '' === $body || strlen( $body ) > $max_bytes ) {
+			$this->cache_fetch_failure( $failure_key );
+
+			return '';
+		}
+
+		if ( function_exists( 'delete_transient' ) ) {
+			delete_transient( $failure_key );
+		}
+
+		return $body;
+	}
+
+	/**
+	 * Cache a short-lived remote fetch failure.
+	 *
+	 * @param string $key Failure cache key.
+	 *
+	 * @return void
+	 */
+	private function cache_fetch_failure( $key ) {
+		if ( function_exists( 'set_transient' ) ) {
+			set_transient( $key, 1, self::FAILURE_TTL );
+		}
+	}
+
+	/**
+	 * Check whether a stylesheet URL is allowed.
+	 *
+	 * @param string $url URL to check.
+	 *
+	 * @return bool
+	 */
+	private function is_allowed_stylesheet_url( $url ) {
+		$host = parse_url( $url, PHP_URL_HOST );
+		$path = parse_url( $url, PHP_URL_PATH );
+
+		return in_array( $host, array( 'fonts.googleapis.com', 'fonts.bunny.net' ), true )
+			&amp;&amp; is_string( $path )
+			&amp;&amp; 0 === strpos( $path, '/css' );
+	}
+
+	/**
+	 * Check whether a font URL is allowed.
+	 *
+	 * @param string $url URL to check.
+	 *
+	 * @return bool
+	 */
+	private function is_allowed_font_url( $url ) {
+		$host = parse_url( $url, PHP_URL_HOST );
+
+		return in_array( $host, array( 'fonts.gstatic.com', 'fonts.bunny.net' ), true )
+			&amp;&amp; in_array( $this->font_extension( $url ), array( 'woff2', 'woff', 'ttf', 'otf', 'eot' ), true );
+	}
+
+	/**
+	 * Return a safe font extension from a URL.
+	 *
+	 * @param string $url Font URL.
+	 *
+	 * @return string
+	 */
+	private function font_extension( $url ) {
+		$path      = (string) parse_url( $url, PHP_URL_PATH );
+		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+
+		return in_array( $extension, array( 'woff2', 'woff', 'ttf', 'otf', 'eot' ), true ) ? $extension : 'woff2';
+	}
+
+	/**
+	 * Convert a possibly relative URL to an absolute URL.
+	 *
+	 * @param string $url  URL found in CSS.
+	 * @param string $base Base stylesheet URL.
+	 *
+	 * @return string
+	 */
+	private function absolute_url( $url, $base ) {
+		if ( '' === $url || 0 === strpos( $url, 'data:' ) ) {
+			return '';
+		}
+
+		if ( 0 === strpos( $url, '//' ) ) {
+			return 'https:' . $url;
+		}
+
+		if ( preg_match( '#^https?://#i', $url ) ) {
+			return $url;
+		}
+
+		$scheme = parse_url( $base, PHP_URL_SCHEME );
+		$host   = parse_url( $base, PHP_URL_HOST );
+
+		if ( ! $scheme || ! $host ) {
+			return '';
+		}
+
+		return $scheme . '://' . $host . '/' . ltrim( $url, '/' );
+	}
+
+	/**
+	 * Normalize a URL for safe use.
+	 *
+	 * @param string $url URL.
+	 *
+	 * @return string
+	 */
+	private function normalize_url( $url ) {
+		$url = html_entity_decode( trim( (string) $url ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+
+		if ( 0 === strpos( $url, '//' ) ) {
+			$url = 'https:' . $url;
+		}
+
+		return preg_match( '#^https?://#i', $url ) ? $url : '';
+	}
+
+	/**
+	 * Normalize path separators.
+	 *
+	 * @param string $path Path.
+	 *
+	 * @return string
+	 */
+	private function normalize_path( $path ) {
+		return str_replace( '\\', '/', (string) $path );
+	}
+
+	/**
+	 * Ensure a cache directory exists.
+	 *
+	 * @param string $dir Directory path.
+	 *
+	 * @return bool
+	 */
+	private function ensure_dir( $dir ) {
+		if ( is_dir( $dir ) ) {
+			return is_writable( $dir );
+		}
+
+		if ( function_exists( 'wp_mkdir_p' ) ) {
+			return wp_mkdir_p( $dir );
+		}
+
+		return mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+	}
+
+	/**
+	 * Write cache content to disk.
+	 *
+	 * @param string $file    File path.
+	 * @param string $content File content.
+	 *
+	 * @return bool
+	 */
+	private function write_file( $file, $content ) {
+		return false !== file_put_contents( $file, $content, LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+	}
+
+	/**
+	 * Check whether a cache file is fresh.
+	 *
+	 * @param string $file File path.
+	 * @param int    $ttl  Time to live in seconds.
+	 *
+	 * @return bool
+	 */
+	private function is_fresh( $file, $ttl ) {
+		return file_exists( $file ) &amp;&amp; ( time() - filemtime( $file ) ) &lt; $ttl;
+	}
+
+	/**
+	 * Return cache TTL.
+	 *
+	 * @return int
+	 */
+	private function ttl() {
+		$month = defined( 'MONTH_IN_SECONDS' ) ? MONTH_IN_SECONDS : 2592000;
+
+		/**
+		 * Filter local Google Fonts cache TTL.
+		 *
+		 * @hook powered_cache_google_fonts_cache_ttl
+		 *
+		 * @param {int} $ttl Cache lifetime in seconds.
+		 *
+		 * @return {int} New value.
+		 * @since 4.0.0
+		 */
+		return max( 3600, (int) apply_filters( 'powered_cache_google_fonts_cache_ttl', $month ) );
+	}
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_advanced_cache_purge_on_comment_update.html">powered_cache_advanced_cache_purge_on_comment_update</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cache_dir_htaccess_file_content.html">powered_cache_cache_dir_htaccess_file_content</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_configuration_regenerated.html">powered_cache_configuration_regenerated</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="populate_preload_queue_urls.html">populate_preload_queue_urls</a></li><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cache_query_strings.html">powered_cache_cache_query_strings</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_disable.html">powered_cache_cdn_disable</a></li><li><a href="powered_cache_cdn_extensions.html">powered_cache_cdn_extensions</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_rewrite_relative_urls.html">powered_cache_cdn_rewrite_relative_urls</a></li><li><a href="powered_cache_cdn_site_hostnames.html">powered_cache_cdn_site_hostnames</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_compatibility_rules_active_environments.html">powered_cache_compatibility_rules_active_environments</a></li><li><a href="powered_cache_compatibility_rules_active_plugins.html">powered_cache_compatibility_rules_active_plugins</a></li><li><a href="powered_cache_compatibility_rules_file.html">powered_cache_compatibility_rules_file</a></li><li><a href="powered_cache_compatibility_rules_registry.html">powered_cache_compatibility_rules_registry</a></li><li><a href="powered_cache_compatibility_rules_remote_hosts.html">powered_cache_compatibility_rules_remote_hosts</a></li><li><a href="powered_cache_compatibility_rules_remote_url.html">powered_cache_compatibility_rules_remote_url</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_defer_exclusions.html">powered_cache_defer_exclusions</a></li><li><a href="powered_cache_delay_exclusions.html">powered_cache_delay_exclusions</a></li><li><a href="powered_cache_delayed_js_script_content.html">powered_cache_delayed_js_script_content</a></li><li><a href="powered_cache_delayed_js_script_loader.html">powered_cache_delayed_js_script_loader</a></li><li><a href="powered_cache_delayed_js_skip.html">powered_cache_delayed_js_skip</a></li><li><a href="powered_cache_delayed_js_timeout.html">powered_cache_delayed_js_timeout</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_js_defer.html">powered_cache_disable_js_defer</a></li><li><a href="powered_cache_disable_js_defer_inline.html">powered_cache_disable_js_defer_inline</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable.html">powered_cache_fo_disable</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_excluded_css_files.html">powered_cache_fo_excluded_css_files</a></li><li><a href="powered_cache_fo_excluded_js_files.html">powered_cache_fo_excluded_js_files</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_google_fonts_domain.html">powered_cache_fo_google_fonts_domain</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_relative_path.html">powered_cache_fo_relative_path</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_google_fonts_cache_ttl.html">powered_cache_google_fonts_cache_ttl</a></li><li><a href="powered_cache_htaccess_add_cors.html">powered_cache_htaccess_add_cors</a></li><li><a href="powered_cache_htaccess_cache_control_rules.html">powered_cache_htaccess_cache_control_rules</a></li><li><a href="powered_cache_htaccess_enable_gzip_compression.html">powered_cache_htaccess_enable_gzip_compression</a></li><li><a href="powered_cache_ignored_query_strings.html">powered_cache_ignored_query_strings</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_background_images.html">powered_cache_lazy_load_background_images</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_exclusions.html">powered_cache_lazy_load_exclusions</a></li><li><a href="powered_cache_lazy_load_html.html">powered_cache_lazy_load_html</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_skip_first_nth_img.html">powered_cache_lazy_load_skip_first_nth_img</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_lazy_load_youtube.html">powered_cache_lazy_load_youtube</a></li><li><a href="powered_cache_lazy_load_youtube_css.html">powered_cache_lazy_load_youtube_css</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_preconnect_resource.html">powered_cache_preconnect_resource</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_add_url_to_queue.html">powered_cache_preload_add_url_to_queue</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_fonts.html">powered_cache_preload_fonts</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_preloader_max_server_load.html">powered_cache_preloader_max_server_load</a></li><li><a href="powered_cache_preloader_should_continue.html">powered_cache_preloader_should_continue</a></li><li><a href="powered_cache_recommended_settings.html">powered_cache_recommended_settings</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_referrers.html">powered_cache_rejected_referrers</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_settings_app_config.html">powered_cache_settings_app_config</a></li><li><a href="powered_cache_settings_sections.html">powered_cache_settings_sections</a></li><li><a href="powered_cache_settings_setup_active_environments.html">powered_cache_settings_setup_active_environments</a></li><li><a href="powered_cache_settings_setup_active_plugins.html">powered_cache_settings_setup_active_plugins</a></li><li><a href="powered_cache_settings_setup_profile.html">powered_cache_settings_setup_profile</a></li><li><a href="powered_cache_settings_validation_context.html">powered_cache_settings_validation_context</a></li><li><a href="powered_cache_settings_validation_issues.html">powered_cache_settings_validation_issues</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_system_status_checks.html">powered_cache_system_status_checks</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>PoweredCache Hooks: Source: classes/SystemStatus.php</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: classes/SystemStatus.php</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>&lt;?php
+/**
+ * System status report.
+ *
+ * @package PoweredCache
+ */
+
+namespace PoweredCache;
+
+/**
+ * Builds admin-facing runtime checks for the settings app.
+ *
+ * @since 4.0.0
+ */
+class SystemStatus {
+
+	const STATUS_GOOD    = 'good';
+	const STATUS_WARNING = 'warning';
+	const STATUS_INFO    = 'info';
+	const STATUS_IDLE    = 'idle';
+
+	/**
+	 * Settings payload.
+	 *
+	 * @var array
+	 */
+	private $settings;
+
+	/**
+	 * Runtime context.
+	 *
+	 * @var array
+	 */
+	private $context;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param array $settings Settings payload.
+	 * @param array $context Runtime context.
+	 */
+	public function __construct( array $settings, array $context = array() ) {
+		$this->settings = $settings;
+		$this->context  = $context;
+	}
+
+	/**
+	 * Create a report instance.
+	 *
+	 * @param array $settings Settings payload.
+	 * @param array $context Runtime context.
+	 *
+	 * @return SystemStatus
+	 */
+	public static function factory( array $settings, array $context = array() ) {
+		return new self( $settings, $context );
+	}
+
+	/**
+	 * Return a normalized status report.
+	 *
+	 * @return array
+	 */
+	public function report() {
+		$checks = array(
+			$this->page_cache_check(),
+			$this->managed_host_cache_check(),
+			$this->cache_storage_check(),
+			$this->object_cache_check(),
+			$this->action_scheduler_check(),
+			$this->cron_check(),
+			$this->rest_api_check(),
+		);
+
+		/**
+		 * Filter settings system status checks.
+		 *
+		 * @hook powered_cache_system_status_checks
+		 *
+		 * @param {array} $checks Runtime status checks.
+		 * @param {array} $settings Settings payload.
+		 * @param {array} $context Runtime context.
+		 *
+		 * @return {array} New value.
+		 * @since 4.0.0
+		 */
+		$checks = apply_filters( 'powered_cache_system_status_checks', $checks, $this->settings, $this->context );
+		$checks = array_values( array_filter( array_map( array( $this, 'normalize_check' ), is_array( $checks ) ? $checks : array() ) ) );
+
+		return array(
+			'status'  => $this->summary_status( $checks ),
+			'counts'  => $this->counts( $checks ),
+			'checks'  => $checks,
+			'updated' => time(),
+		);
+	}
+
+	/**
+	 * Return the page cache readiness check.
+	 *
+	 * @return array
+	 */
+	private function page_cache_check() {
+		if ( empty( $this->settings['enable_page_cache'] ) ) {
+			return $this->check(
+				'page_cache',
+				self::STATUS_IDLE,
+				'Page cache',
+				'Page cache is disabled.',
+				'Enable page cache when the site is ready to serve cached HTML.',
+				'cache'
+			);
+		}
+
+		if ( $this->context_flag_is( 'wp_cache_enabled', false ) ) {
+			return $this->check(
+				'page_cache',
+				self::STATUS_WARNING,
+				'Page cache',
+				'WP_CACHE is not enabled.',
+				'Use Fix configuration in Tools to add WP_CACHE to wp-config.php, or add define( "WP_CACHE", true ) manually.',
+				'cache'
+			);
+		}
+
+		if ( $this->context_flag_is( 'page_cache_loaded', false ) || $this->context_flag_is( 'page_cache_has_problem', true ) ) {
+			return $this->check(
+				'page_cache',
+				self::STATUS_WARNING,
+				'Page cache',
+				'The page cache drop-in is not active.',
+				'Use Fix configuration in Tools to recreate the configuration files, then verify advanced-cache.php is writable.',
+				'cache'
+			);
+		}
+
+		return $this->check(
+			'page_cache',
+			self::STATUS_GOOD,
+			'Page cache',
+			'Cached HTML delivery is ready.',
+			'Anonymous visits can be served from the page cache.',
+			'cache'
+		);
+	}
+
+	/**
+	 * Return managed hosting cache guidance.
+	 *
+	 * @return array
+	 */
+	private function managed_host_cache_check() {
+		if ( empty( $this->settings['enable_page_cache'] ) ) {
+			return array();
+		}
+
+		$hosts = array_intersect(
+			$this->active_environments(),
+			array(
+				'host:kinsta',
+				'host:wp-engine',
+				'host:pantheon',
+			)
+		);
+
+		if ( empty( $hosts ) ) {
+			return array();
+		}
+
+		$labels = array(
+			'host:kinsta'    => 'Kinsta',
+			'host:wp-engine' => 'WP Engine',
+			'host:pantheon'  => 'Pantheon',
+		);
+		$names  = array();
+
+		foreach ( $hosts as $host ) {
+			if ( isset( $labels[ $host ] ) ) {
+				$names[] = $labels[ $host ];
+			}
+		}
+
+		return $this->check(
+			'managed_host_cache',
+			self::STATUS_INFO,
+			'Managed host cache',
+			'Hosting cache layer detected.',
+			sprintf( 'Purge %s cache when testing page cache changes so stale platform responses do not hide the result.', implode( ', ', $names ) ),
+			'cache'
+		);
+	}
+
+	/**
+	 * Return the cache storage readiness check.
+	 *
+	 * @return array
+	 */
+	private function cache_storage_check() {
+		$cache_dir = function_exists( '\PoweredCache\Utils\get_cache_dir' ) ? \PoweredCache\Utils\get_cache_dir() : '';
+		$writable  = $this->path_is_writable( $cache_dir );
+
+		if ( ! $writable ) {
+			return $this->check(
+				'cache_storage',
+				self::STATUS_WARNING,
+				'Cache storage',
+				'Cache directory is not writable.',
+				'Make sure wp-content/cache can be created and written by PHP.',
+				'misc',
+				$cache_dir
+			);
+		}
+
+		return $this->check(
+			'cache_storage',
+			self::STATUS_GOOD,
+			'Cache storage',
+			'Cache directory is writable.',
+			'Powered Cache can store generated page and optimization files.',
+			'misc',
+			$cache_dir
+		);
+	}
+
+	/**
+	 * Return the object cache readiness check.
+	 *
+	 * @return array
+	 */
+	private function object_cache_check() {
+		$backend = isset( $this->settings['object_cache'] ) ? (string) $this->settings['object_cache'] : 'off';
+
+		if ( '' === $backend || 'off' === $backend ) {
+			return $this->check(
+				'object_cache',
+				self::STATUS_IDLE,
+				'Object cache',
+				'Persistent object cache is off.',
+				'Only supported PHP drivers are shown when this server can use them.',
+				'cache'
+			);
+		}
+
+		$available = isset( $this->context['object_cache_backends'] ) &amp;&amp; is_array( $this->context['object_cache_backends'] ) ? $this->context['object_cache_backends'] : array();
+
+		if ( ! in_array( $backend, $available, true ) ) {
+			return $this->check(
+				'object_cache',
+				self::STATUS_WARNING,
+				'Object cache',
+				'Selected object cache driver is not available.',
+				'Install the matching PHP extension or switch the backend off.',
+				'cache'
+			);
+		}
+
+		if ( $this->context_flag_is( 'object_cache_dropin_exists', false ) || $this->context_flag_is( 'object_cache_has_problem', true ) ) {
+			return $this->check(
+				'object_cache',
+				self::STATUS_WARNING,
+				'Object cache',
+				'Object cache drop-in needs attention.',
+				'Use Fix configuration in Tools to recreate object-cache.php, then verify the file is writable.',
+				'cache'
+			);
+		}
+
+		return $this->check(
+			'object_cache',
+			self::STATUS_GOOD,
+			'Object cache',
+			ucfirst( $backend ) . ' object cache is configured.',
+			'Persistent object caching can be used for dynamic WordPress data.',
+			'cache'
+		);
+	}
+
+	/**
+	 * Return the async scheduler readiness check.
+	 *
+	 * @return array
+	 */
+	private function action_scheduler_check() {
+		$ready = isset( $this->context['action_scheduler_ready'] )
+			? (bool) $this->context['action_scheduler_ready']
+			: (
+				function_exists( 'as_enqueue_async_action' )
+				&amp;&amp; class_exists( '\ActionScheduler' )
+				&amp;&amp; is_callable( array( '\ActionScheduler', 'is_initialized' ) )
+				&amp;&amp; \ActionScheduler::is_initialized( __METHOD__ )
+			);
+
+		if ( ! $ready ) {
+			return $this->check(
+				'action_scheduler',
+				self::STATUS_WARNING,
+				'Background jobs',
+				'Action Scheduler is not ready yet.',
+				'Background cache, preload, and optimization queues may wait until Action Scheduler initializes.',
+				'misc'
+			);
+		}
+
+		return $this->check(
+			'action_scheduler',
+			self::STATUS_GOOD,
+			'Background jobs',
+			'Action Scheduler is ready.',
+			'Async cache and optimization jobs can be queued reliably.',
+			'misc'
+		);
+	}
+
+	/**
+	 * Return the cron readiness check.
+	 *
+	 * @return array
+	 */
+	private function cron_check() {
+		if ( defined( 'DISABLE_WP_CRON' ) &amp;&amp; DISABLE_WP_CRON ) {
+			return $this->check(
+				'wp_cron',
+				self::STATUS_INFO,
+				'WP-Cron',
+				'Built-in WP-Cron is disabled.',
+				'This is fine when a real server cron runs wp-cron.php regularly.',
+				'misc'
+			);
+		}
+
+		return $this->check(
+			'wp_cron',
+			self::STATUS_GOOD,
+			'WP-Cron',
+			'WP-Cron is available.',
+			'Scheduled maintenance and background queues have a default runner.',
+			'misc'
+		);
+	}
+
+	/**
+	 * Return the REST API readiness check.
+	 *
+	 * @return array
+	 */
+	private function rest_api_check() {
+		if ( ! function_exists( 'rest_url' ) ) {
+			return $this->check(
+				'rest_api',
+				self::STATUS_WARNING,
+				'REST API',
+				'REST API helpers are unavailable.',
+				'Settings, status refreshes, and service actions require WordPress REST API support.',
+				'misc'
+			);
+		}
+
+		return $this->check(
+			'rest_api',
+			self::STATUS_GOOD,
+			'REST API',
+			'REST API is available.',
+			'The settings app can save changes and refresh runtime status without page reloads.',
+			'misc'
+		);
+	}
+
+	/**
+	 * Build one check.
+	 *
+	 * @param string $code Check code.
+	 * @param string $status Check status.
+	 * @param string $label Check label.
+	 * @param string $message Short message.
+	 * @param string $description Longer description.
+	 * @param string $section Settings section key.
+	 * @param string $detail Optional detail.
+	 *
+	 * @return array
+	 */
+	private function check( $code, $status, $label, $message, $description, $section = '', $detail = '' ) {
+		return array(
+			'code'        => $code,
+			'status'      => $status,
+			'label'       => $label,
+			'message'     => $message,
+			'description' => $description,
+			'section'     => $section,
+			'detail'      => $detail,
+		);
+	}
+
+	/**
+	 * Normalize one check for REST output.
+	 *
+	 * @param mixed $check Check payload.
+	 *
+	 * @return array
+	 */
+	private function normalize_check( $check ) {
+		if ( ! is_array( $check ) || empty( $check['code'] ) ) {
+			return array();
+		}
+
+		$status = isset( $check['status'] ) ? (string) $check['status'] : self::STATUS_INFO;
+
+		if ( ! in_array( $status, array( self::STATUS_GOOD, self::STATUS_WARNING, self::STATUS_INFO, self::STATUS_IDLE ), true ) ) {
+			$status = self::STATUS_INFO;
+		}
+
+		return array(
+			'code'        => $this->sanitize_key( $check['code'] ),
+			'status'      => $status,
+			'label'       => isset( $check['label'] ) ? $this->sanitize_text( $check['label'] ) : '',
+			'message'     => isset( $check['message'] ) ? $this->sanitize_text( $check['message'] ) : '',
+			'description' => isset( $check['description'] ) ? $this->sanitize_text( $check['description'] ) : '',
+			'section'     => isset( $check['section'] ) ? $this->sanitize_key( $check['section'] ) : '',
+			'detail'      => isset( $check['detail'] ) ? $this->sanitize_text( $check['detail'] ) : '',
+		);
+	}
+
+	/**
+	 * Return summary counts.
+	 *
+	 * @param array $checks Checks.
+	 *
+	 * @return array
+	 */
+	private function counts( array $checks ) {
+		$counts = array(
+			self::STATUS_GOOD    => 0,
+			self::STATUS_WARNING => 0,
+			self::STATUS_INFO    => 0,
+			self::STATUS_IDLE    => 0,
+		);
+
+		foreach ( $checks as $check ) {
+			if ( isset( $counts[ $check['status'] ] ) ) {
+				$counts[ $check['status'] ]++;
+			}
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * Return summary status.
+	 *
+	 * @param array $checks Checks.
+	 *
+	 * @return string
+	 */
+	private function summary_status( array $checks ) {
+		$counts = $this->counts( $checks );
+
+		if ( $counts[ self::STATUS_WARNING ] > 0 ) {
+			return self::STATUS_WARNING;
+		}
+
+		if ( $counts[ self::STATUS_INFO ] > 0 ) {
+			return self::STATUS_INFO;
+		}
+
+		return self::STATUS_GOOD;
+	}
+
+	/**
+	 * Determine whether a known runtime context flag matches an expected value.
+	 *
+	 * @param string $flag     Context flag.
+	 * @param bool   $expected Expected value.
+	 *
+	 * @return bool
+	 */
+	private function context_flag_is( $flag, $expected ) {
+		return array_key_exists( $flag, $this->context ) &amp;&amp; (bool) $this->context[ $flag ] === (bool) $expected;
+	}
+
+	/**
+	 * Return active hosting/runtime environment identifiers.
+	 *
+	 * @return array
+	 */
+	private function active_environments() {
+		if ( isset( $this->context['active_environments'] ) &amp;&amp; is_array( $this->context['active_environments'] ) ) {
+			return $this->normalize_list( $this->context['active_environments'] );
+		}
+
+		$environments = array();
+
+		if ( defined( 'KINSTAMU_VERSION' ) ) {
+			$environments[] = 'host:kinsta';
+		}
+
+		if ( defined( 'WPE_APIKEY' ) || defined( 'WPE_CLUSTER_ID' ) || defined( 'PWP_NAME' ) ) {
+			$environments[] = 'host:wp-engine';
+		}
+
+		if ( defined( 'PANTHEON_ENVIRONMENT' ) ) {
+			$environments[] = 'host:pantheon';
+		}
+
+		return $this->normalize_list( $environments );
+	}
+
+	/**
+	 * Normalize a scalar list.
+	 *
+	 * @param array $values Values.
+	 *
+	 * @return array
+	 */
+	private function normalize_list( array $values ) {
+		$normalized = array();
+
+		foreach ( $values as $value ) {
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			$value = trim( (string) $value );
+
+			if ( '' !== $value ) {
+				$normalized[] = $value;
+			}
+		}
+
+		return array_values( array_unique( $normalized ) );
+	}
+
+	/**
+	 * Determine whether a path or its parent can be written.
+	 *
+	 * @param string $path Path.
+	 *
+	 * @return bool
+	 */
+	private function path_is_writable( $path ) {
+		$path = (string) $path;
+
+		if ( '' === $path ) {
+			return false;
+		}
+
+		if ( file_exists( $path ) ) {
+			return is_writable( $path );
+		}
+
+		$parent = dirname( rtrim( $path, '/\\' ) );
+
+		return $parent &amp;&amp; file_exists( $parent ) &amp;&amp; is_writable( $parent );
+	}
+
+	/**
+	 * Sanitize a REST-safe key.
+	 *
+	 * @param mixed $value Value.
+	 *
+	 * @return string
+	 */
+	private function sanitize_key( $value ) {
+		if ( function_exists( 'sanitize_key' ) ) {
+			return sanitize_key( $value );
+		}
+
+		return strtolower( preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $value ) );
+	}
+
+	/**
+	 * Sanitize one line of admin text.
+	 *
+	 * @param mixed $value Value.
+	 *
+	 * @return string
+	 */
+	private function sanitize_text( $value ) {
+		if ( function_exists( 'sanitize_text_field' ) ) {
+			return sanitize_text_field( $value );
+		}
+
+		if ( function_exists( 'wp_strip_all_tags' ) ) {
+			return trim( wp_strip_all_tags( (string) $value ) );
+		}
+
+		return trim( strip_tags( (string) $value ) );
+	}
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Actions</h3><ul><li><a href="powered_cache_advanced_cache_purge_on_comment_update.html">powered_cache_advanced_cache_purge_on_comment_update</a></li><li><a href="powered_cache_advanced_cache_purge_post.html">powered_cache_advanced_cache_purge_post</a></li><li><a href="powered_cache_after_clean_up.html">powered_cache_after_clean_up</a></li><li><a href="powered_cache_cache_dir_htaccess_file_content.html">powered_cache_cache_dir_htaccess_file_content</a></li><li><a href="powered_cache_cdn_setup.html">powered_cache_cdn_setup</a></li><li><a href="powered_cache_clean_site_cache_dir.html">powered_cache_clean_site_cache_dir</a></li><li><a href="powered_cache_configuration_regenerated.html">powered_cache_configuration_regenerated</a></li><li><a href="powered_cache_create_config_file.html">powered_cache_create_config_file</a></li><li><a href="powered_cache_flushed.html">powered_cache_flushed</a></li><li><a href="powered_cache_fo_js_concat_did_items.html">powered_cache_fo_js_concat_did_items</a></li><li><a href="powered_cache_get_url_dir.html">powered_cache_get_url_dir</a></li><li><a href="powered_cache_init.html">powered_cache_init</a></li><li><a href="powered_cache_lazy_load_compat.html">powered_cache_lazy_load_compat</a></li><li><a href="powered_cache_lazy_load_filter.html">powered_cache_lazy_load_filter</a></li><li><a href="powered_cache_lazy_load_placeholder_url.html">powered_cache_lazy_load_placeholder_url</a></li><li><a href="powered_cache_loaded.html">powered_cache_loaded</a></li><li><a href="powered_cache_mobile_browsers.html">powered_cache_mobile_browsers</a></li><li><a href="powered_cache_mobile_prefixes.html">powered_cache_mobile_prefixes</a></li><li><a href="powered_cache_page_cache_enable.html">powered_cache_page_cache_enable</a></li><li><a href="powered_cache_page_cached.html">powered_cache_page_cached</a></li><li><a href="powered_cache_preload_http_request.html">powered_cache_preload_http_request</a></li><li><a href="powered_cache_purge_all_cache.html">powered_cache_purge_all_cache</a></li><li><a href="powered_cache_settings_saved.html">powered_cache_settings_saved</a></li><li><a href="powered_cache_updated.html">powered_cache_updated</a></li></ul><h3>Filters</h3><ul><li><a href="populate_preload_queue_urls.html">populate_preload_queue_urls</a></li><li><a href="powered_cache_accepted_query_strings.html">powered_cache_accepted_query_strings</a></li><li><a href="powered_cache_advanced_cache_file_content.html">powered_cache_advanced_cache_file_content</a></li><li><a href="powered_cache_advanced_cache_purge_urls.html">powered_cache_advanced_cache_purge_urls</a></li><li><a href="powered_cache_after_htaccess.html">powered_cache_after_htaccess</a></li><li><a href="powered_cache_auto_htaccess_update.html">powered_cache_auto_htaccess_update</a></li><li><a href="powered_cache_browser_cache.html">powered_cache_browser_cache</a></li><li><a href="powered_cache_browser_cache_assets_lifespan.html">powered_cache_browser_cache_assets_lifespan</a></li><li><a href="powered_cache_browser_cache_default_lifespan.html">powered_cache_browser_cache_default_lifespan</a></li><li><a href="powered_cache_browser_cache_lifespan.html">powered_cache_browser_cache_lifespan</a></li><li><a href="powered_cache_cache_purge_interval.html">powered_cache_cache_purge_interval</a></li><li><a href="powered_cache_cache_query_strings.html">powered_cache_cache_query_strings</a></li><li><a href="powered_cache_cdn_addresses.html">powered_cache_cdn_addresses</a></li><li><a href="powered_cache_cdn_disable.html">powered_cache_cdn_disable</a></li><li><a href="powered_cache_cdn_extensions.html">powered_cache_cdn_extensions</a></li><li><a href="powered_cache_cdn_image_extensions.html">powered_cache_cdn_image_extensions</a></li><li><a href="powered_cache_cdn_rewrite_relative_urls.html">powered_cache_cdn_rewrite_relative_urls</a></li><li><a href="powered_cache_cdn_site_hostnames.html">powered_cache_cdn_site_hostnames</a></li><li><a href="powered_cache_cdn_zones.html">powered_cache_cdn_zones</a></li><li><a href="powered_cache_compatibility_rules_active_environments.html">powered_cache_compatibility_rules_active_environments</a></li><li><a href="powered_cache_compatibility_rules_active_plugins.html">powered_cache_compatibility_rules_active_plugins</a></li><li><a href="powered_cache_compatibility_rules_file.html">powered_cache_compatibility_rules_file</a></li><li><a href="powered_cache_compatibility_rules_registry.html">powered_cache_compatibility_rules_registry</a></li><li><a href="powered_cache_compatibility_rules_remote_hosts.html">powered_cache_compatibility_rules_remote_hosts</a></li><li><a href="powered_cache_compatibility_rules_remote_url.html">powered_cache_compatibility_rules_remote_url</a></li><li><a href="powered_cache_default_settings.html">powered_cache_default_settings</a></li><li><a href="powered_cache_defer_exclusions.html">powered_cache_defer_exclusions</a></li><li><a href="powered_cache_delay_exclusions.html">powered_cache_delay_exclusions</a></li><li><a href="powered_cache_delayed_js_script_content.html">powered_cache_delayed_js_script_content</a></li><li><a href="powered_cache_delayed_js_script_loader.html">powered_cache_delayed_js_script_loader</a></li><li><a href="powered_cache_delayed_js_skip.html">powered_cache_delayed_js_skip</a></li><li><a href="powered_cache_delayed_js_timeout.html">powered_cache_delayed_js_timeout</a></li><li><a href="powered_cache_disable_advanced_cache_notices.html">powered_cache_disable_advanced_cache_notices</a></li><li><a href="powered_cache_disable_js_defer.html">powered_cache_disable_js_defer</a></li><li><a href="powered_cache_disable_js_defer_inline.html">powered_cache_disable_js_defer_inline</a></li><li><a href="powered_cache_disable_native_lazyload.html">powered_cache_disable_native_lazyload</a></li><li><a href="powered_cache_fo_allow_gzip_compression.html">powered_cache_fo_allow_gzip_compression</a></li><li><a href="powered_cache_fo_cache_ttl.html">powered_cache_fo_cache_ttl</a></li><li><a href="powered_cache_fo_css_do_concat.html">powered_cache_fo_css_do_concat</a></li><li><a href="powered_cache_fo_dashboard.html">powered_cache_fo_dashboard</a></li><li><a href="powered_cache_fo_disable.html">powered_cache_fo_disable</a></li><li><a href="powered_cache_fo_disable_css_combine.html">powered_cache_fo_disable_css_combine</a></li><li><a href="powered_cache_fo_disable_css_minify.html">powered_cache_fo_disable_css_minify</a></li><li><a href="powered_cache_fo_disable_html_minify.html">powered_cache_fo_disable_html_minify</a></li><li><a href="powered_cache_fo_disable_js_combine.html">powered_cache_fo_disable_js_combine</a></li><li><a href="powered_cache_fo_disable_js_minify.html">powered_cache_fo_disable_js_minify</a></li><li><a href="powered_cache_fo_excluded_css_files.html">powered_cache_fo_excluded_css_files</a></li><li><a href="powered_cache_fo_excluded_js_files.html">powered_cache_fo_excluded_js_files</a></li><li><a href="powered_cache_fo_google_font_display.html">powered_cache_fo_google_font_display</a></li><li><a href="powered_cache_fo_google_fonts_domain.html">powered_cache_fo_google_fonts_domain</a></li><li><a href="powered_cache_fo_js_do_concat.html">powered_cache_fo_js_do_concat</a></li><li><a href="powered_cache_fo_relative_path.html">powered_cache_fo_relative_path</a></li><li><a href="powered_cache_fo_script_loader_tag.html">powered_cache_fo_script_loader_tag</a></li><li><a href="powered_cache_fo_site_url.html">powered_cache_fo_site_url</a></li><li><a href="powered_cache_fo_style_loader_tag.html">powered_cache_fo_style_loader_tag</a></li><li><a href="powered_cache_get_page_cache_dir.html">powered_cache_get_page_cache_dir</a></li><li><a href="powered_cache_google_fonts_cache_ttl.html">powered_cache_google_fonts_cache_ttl</a></li><li><a href="powered_cache_htaccess_add_cors.html">powered_cache_htaccess_add_cors</a></li><li><a href="powered_cache_htaccess_cache_control_rules.html">powered_cache_htaccess_cache_control_rules</a></li><li><a href="powered_cache_htaccess_enable_gzip_compression.html">powered_cache_htaccess_enable_gzip_compression</a></li><li><a href="powered_cache_ignored_query_strings.html">powered_cache_ignored_query_strings</a></li><li><a href="powered_cache_js_execution_methods.html">powered_cache_js_execution_methods</a></li><li><a href="powered_cache_known_headers.html">powered_cache_known_headers</a></li><li><a href="powered_cache_lazy_load_avatar.html">powered_cache_lazy_load_avatar</a></li><li><a href="powered_cache_lazy_load_background_images.html">powered_cache_lazy_load_background_images</a></li><li><a href="powered_cache_lazy_load_enabled.html">powered_cache_lazy_load_enabled</a></li><li><a href="powered_cache_lazy_load_exclusions.html">powered_cache_lazy_load_exclusions</a></li><li><a href="powered_cache_lazy_load_html.html">powered_cache_lazy_load_html</a></li><li><a href="powered_cache_lazy_load_iframes.html">powered_cache_lazy_load_iframes</a></li><li><a href="powered_cache_lazy_load_images.html">powered_cache_lazy_load_images</a></li><li><a href="powered_cache_lazy_load_post_content.html">powered_cache_lazy_load_post_content</a></li><li><a href="powered_cache_lazy_load_post_thumbnail.html">powered_cache_lazy_load_post_thumbnail</a></li><li><a href="powered_cache_lazy_load_run_filter.html">powered_cache_lazy_load_run_filter</a></li><li><a href="powered_cache_lazy_load_skip_classes.html">powered_cache_lazy_load_skip_classes</a></li><li><a href="powered_cache_lazy_load_skip_first_nth_img.html">powered_cache_lazy_load_skip_first_nth_img</a></li><li><a href="powered_cache_lazy_load_threshold.html">powered_cache_lazy_load_threshold</a></li><li><a href="powered_cache_lazy_load_widget_text.html">powered_cache_lazy_load_widget_text</a></li><li><a href="powered_cache_lazy_load_youtube.html">powered_cache_lazy_load_youtube</a></li><li><a href="powered_cache_lazy_load_youtube_css.html">powered_cache_lazy_load_youtube_css</a></li><li><a href="powered_cache_log_destination.html">powered_cache_log_destination</a></li><li><a href="powered_cache_log_message.html">powered_cache_log_message</a></li><li><a href="powered_cache_log_message_type.html">powered_cache_log_message_type</a></li><li><a href="powered_cache_maybe_1and1_hosting.html">powered_cache_maybe_1and1_hosting</a></li><li><a href="powered_cache_mod_rewrite.html">powered_cache_mod_rewrite</a></li><li><a href="powered_cache_object_cache_dropins.html">powered_cache_object_cache_dropins</a></li><li><a href="powered_cache_object_cache_file_content.html">powered_cache_object_cache_file_content</a></li><li><a href="powered_cache_page_cache_meta_info.html">powered_cache_page_cache_meta_info</a></li><li><a href="powered_cache_page_cache_meta_params.html">powered_cache_page_cache_meta_params</a></li><li><a href="powered_cache_page_caching_buffer.html">powered_cache_page_caching_buffer</a></li><li><a href="powered_cache_post_related_urls.html">powered_cache_post_related_urls</a></li><li><a href="powered_cache_pre_htaccess.html">powered_cache_pre_htaccess</a></li><li><a href="powered_cache_preconnect_resource.html">powered_cache_preconnect_resource</a></li><li><a href="powered_cache_prefetch_dns.html">powered_cache_prefetch_dns</a></li><li><a href="powered_cache_preload_add_url_to_queue.html">powered_cache_preload_add_url_to_queue</a></li><li><a href="powered_cache_preload_expired_urls.html">powered_cache_preload_expired_urls</a></li><li><a href="powered_cache_preload_fonts.html">powered_cache_preload_fonts</a></li><li><a href="powered_cache_preload_mobile_user_agent.html">powered_cache_preload_mobile_user_agent</a></li><li><a href="powered_cache_preload_post_limit.html">powered_cache_preload_post_limit</a></li><li><a href="powered_cache_preload_post_types.html">powered_cache_preload_post_types</a></li><li><a href="powered_cache_preload_public_posts_offset.html">powered_cache_preload_public_posts_offset</a></li><li><a href="powered_cache_preload_public_taxonomies_offset.html">powered_cache_preload_public_taxonomies_offset</a></li><li><a href="powered_cache_preload_request_interval.html">powered_cache_preload_request_interval</a></li><li><a href="powered_cache_preload_tax_term_args.html">powered_cache_preload_tax_term_args</a></li><li><a href="powered_cache_preload_taxonomies.html">powered_cache_preload_taxonomies</a></li><li><a href="powered_cache_preload_term_limit.html">powered_cache_preload_term_limit</a></li><li><a href="powered_cache_preload_url_request_args.html">powered_cache_preload_url_request_args</a></li><li><a href="powered_cache_preloader_max_server_load.html">powered_cache_preloader_max_server_load</a></li><li><a href="powered_cache_preloader_should_continue.html">powered_cache_preloader_should_continue</a></li><li><a href="powered_cache_recommended_settings.html">powered_cache_recommended_settings</a></li><li><a href="powered_cache_rejected_cookies.html">powered_cache_rejected_cookies</a></li><li><a href="powered_cache_rejected_referrers.html">powered_cache_rejected_referrers</a></li><li><a href="powered_cache_rejected_uri_list.html">powered_cache_rejected_uri_list</a></li><li><a href="powered_cache_rejected_user_agents.html">powered_cache_rejected_user_agents</a></li><li><a href="powered_cache_sanitized_options.html">powered_cache_sanitized_options</a></li><li><a href="powered_cache_scheduled_cleanup_frequency_options.html">powered_cache_scheduled_cleanup_frequency_options</a></li><li><a href="powered_cache_settings_app_config.html">powered_cache_settings_app_config</a></li><li><a href="powered_cache_settings_sections.html">powered_cache_settings_sections</a></li><li><a href="powered_cache_settings_setup_active_environments.html">powered_cache_settings_setup_active_environments</a></li><li><a href="powered_cache_settings_setup_active_plugins.html">powered_cache_settings_setup_active_plugins</a></li><li><a href="powered_cache_settings_setup_profile.html">powered_cache_settings_setup_profile</a></li><li><a href="powered_cache_settings_validation_context.html">powered_cache_settings_validation_context</a></li><li><a href="powered_cache_settings_validation_issues.html">powered_cache_settings_validation_issues</a></li><li><a href="powered_cache_site_cache_dir.html">powered_cache_site_cache_dir</a></li><li><a href="powered_cache_system_status_checks.html">powered_cache_system_status_checks</a></li><li><a href="powered_cache_vary_cookies.html">powered_cache_vary_cookies</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
